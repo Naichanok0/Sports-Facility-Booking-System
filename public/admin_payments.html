@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>แอดมิน — ข้อมูลชำระเงิน | จองคิวใบขับขี่</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">DLT ระบบจองคิวทำใบขับขี่</div>
+    <nav id="nav-links">
+      <a href="/book.html">จองคิว</a>
+      <a href="/status.html">คิวของฉัน</a>
+      <a href="/admin.html">แอดมิน</a>
+      <a href="/admin_payments.html" class="active">รายการชำระเงิน</a>
+      <a href="#" id="logout">ออกจากระบบ</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="section-title">
+        <h2>ขอชำระเงิน (Payment requests)</h2>
+      </div>
+
+      <div class="row cols-2">
+        <div>
+          <label for="filterCenter">ศูนย์ (Center)</label>
+          <select id="filterCenter"></select>
+        </div>
+        <div>
+          <label for="filterDate">วันที่</label>
+          <input id="filterDate" type="date" />
+        </div>
+      </div>
+
+      <div class="mt-12">
+        <button id="btnLoad" class="btn btn-primary">โหลดรายการ</button>
+        <button id="btnLoadAll" class="btn btn-secondary" style="margin-left:8px;">แสดงทั้งหมด</button>
+      </div>
+
+      <div class="table-wrap mt-12">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th><th>เวลา</th><th>ศูนย์</th><th>บริการ</th><th>ผู้จอง</th><th>ตั๋ว</th><th>สถานะ</th><th>Ref</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="paymentsBody"></tbody>
+        </table>
+      </div>
+
+      <p id="msg" class="mt-12"></p>
+    </section>
+  </main>
+
+  <script src="/js/admin_payments.js" defer></script>
+</body>
+</html>

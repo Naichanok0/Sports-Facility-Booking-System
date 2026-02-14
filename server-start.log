@@ -1,0 +1,7 @@
+
+> dlt-queue-web@1.0.0 dev
+> node server.js
+
+{"level":30,"time":"2025-11-20T14:27:42.592Z","pid":false,"msg":"✅ Connected to SQL Server"}
+{"level":30,"time":"2025-11-20T14:27:42.595Z","pid":false,"msg":"🚀 API & Web running at http://localhost:3089"}
+Terminate batch job (Y/N)? ^C

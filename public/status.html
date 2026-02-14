@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>คิวของฉัน | ใบขับขี่</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">DLT</div>
+        <div>
+          <div style="font-size:18px; line-height:1">ระบบจองคิวทำใบขับขี่</div>
+          <div class="muted" style="font-size:12px">กรมการขนส่งทางบก</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/book.html">จองคิว</a>
+        <a href="/status.html">คิวของฉัน</a>
+         <a id="navAdmin" href="/admin.html" style="display:none">แอดมิน</a>
+        <a id="logout" href="/index.html">ออกจากระบบ</a>
+      </nav>
+      <script src="/js/nav.js" defer></script>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">คิวของฉัน</h1>
+
+    <div class="card">
+      <table class="table" aria-label="ตารางคิวของฉัน">
+        <thead>
+          <tr>
+            <th>วัน</th>
+            <th>เวลา</th>
+            <th>ศูนย์</th>
+            <th>บริการ</th>
+            <th>สถานะ</th>
+            <th>เลขบัตรคิว</th>
+            <th class="center">ดำเนินการ</th>
+          </tr>
+        </thead>
+        <tbody id="myBody"></tbody>
+      </table>
+
+      <p id="msg" class="notice" style="display:none"></p>
+    </div>
+  </main>
+
+  <footer class="footer">© 2025 กรมการขนส่งทางบก — ระบบจองคิวใบขับขี่</footer>
+
+  <script src="/js/status.js" defer></script>
+</body>
+</html>

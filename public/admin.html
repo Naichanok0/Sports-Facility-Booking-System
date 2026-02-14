@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>ผู้ดูแลระบบ | จองคิวใบขับขี่</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- สไตล์หลัก + สไตล์ทางการของหน้าแอดมิน -->
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/admin.css" />
+</head>
+<body>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand">DLT ระบบจองคิวทำใบขับขี่</div>
+    <nav id="nav-links">
+      <a href="/book.html">จองคิว</a>
+      <a href="/status.html">คิวของฉัน</a>
+      <a href="/admin.html" class="active">แอดมิน</a>
+      <a href="/admin_payments.html">รายการชำระเงิน</a>
+      <a href="#" id="logout">ออกจากระบบ</a>
+    </nav>
+  </header>
+
+  <main class="container grid">
+    <!-- รายงานสรุปต่อวัน -->
+    <section class="card">
+      <div class="section-title">
+        <h2>รายงานสรุปต่อวัน</h2>
+        <span class="chip"><span class="dot ok"></span>Live</span>
+      </div>
+
+      <div class="row cols-2">
+        <div>
+          <label for="filterCenter">ศูนย์ (Center)</label>
+          <select id="filterCenter"></select>
+        </div>
+        <div>
+          <label for="filterDate">วันที่</label>
+          <input id="filterDate" type="date" />
+        </div>
+      </div>
+
+      <button id="btnLoadSummary" class="btn btn-primary mt-12">ดูรายงาน</button>
+
+      <div class="table-wrap mt-12" id="summaryArea">
+        <!-- admin.js จะเติมตารางสรุป -->
+      </div>
+    </section>
+
+    <!-- จัดการศูนย์บริการ -->
+    <section class="card">
+      <div class="section-title">
+        <h2>จัดการศูนย์บริการ (Centers)</h2>
+        <button id="btnReloadCenters" class="btn btn-outline">รีเฟรช</button>
+      </div>
+
+      <div class="row cols-2">
+        <div>
+          <label for="cCode">CenterCode</label>
+          <input id="cCode" type="text" placeholder="เช่น DLT01" />
+        </div>
+        <div>
+          <label for="cProv">Province (ไม่บังคับ)</label>
+          <input id="cProv" type="text" placeholder="กรุงเทพฯ" />
+        </div>
+        <div class="colspan">
+          <label for="cName">CenterName</label>
+          <input id="cName" type="text" placeholder="ศูนย์ขนส่งหลักเมือง กรุงเทพฯ" />
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <label><input type="checkbox" id="cActive" checked /> Active</label>
+        <button id="btnAddCenter" class="btn btn-primary mt-8">เพิ่มศูนย์</button>
+      </div>
+
+      <div class="table-wrap mt-12">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Code</th><th>Name</th><th>Province</th><th>Active</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="centersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- จัดการบริการ -->
+    <section class="card">
+      <div class="section-title">
+        <h2>จัดการบริการ (Services)</h2>
+        <button id="btnReloadServices" class="btn btn-outline">รีเฟรช</button>
+      </div>
+
+      <div class="row cols-2">
+        <div>
+          <label for="sCenterId">CenterID</label>
+          <input id="sCenterId" type="number" min="1" placeholder="เช่น 1" />
+        </div>
+        <div>
+          <label for="sName">ServiceName</label>
+          <input id="sName" type="text" placeholder="สอบทฤษฎี (60 นาที)" />
+        </div>
+        <div>
+          <label for="sDur">Duration (min)</label>
+          <input id="sDur" type="number" min="1" placeholder="60" />
+        </div>
+        <div>
+          <label for="sCap">SlotCapacity</label>
+          <input id="sCap" type="number" min="1" placeholder="25" />
+        </div>
+        <div>
+          <label for="sFee">Fee</label>
+          <input id="sFee" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="mt-8">
+          <label><input type="checkbox" id="sPay" /> RequiresPayment</label>
+          <label class="ml-12"><input type="checkbox" id="sActive" checked /> Active</label>
+        </div>
+      </div>
+
+      <button id="btnAddService" class="btn btn-primary mt-12">เพิ่มบริการ</button>
+
+      <div class="table-wrap mt-12">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Center</th><th>Service</th><th>Dur</th><th>Cap</th><th>Fee</th><th>Pay</th><th>Active</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="servicesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p id="msg" class="mt-12"></p>
+  </main>
+
+  <script src="/js/admin.js" defer></script>
+</body>
+</html>

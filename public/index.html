@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>เข้าสู่ระบบ | จองคิวใบขับขี่</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">DLT</div>
+        <div>
+          <div style="font-size:18px; line-height:1">ระบบจองคิวทำใบขับขี่</div>
+          <div class="muted" style="font-size:12px">กรมการขนส่งทางบก</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/book.html">จองคิว</a>
+        <a href="/status.html">คิวของฉัน</a>
+         <a id="navAdmin" href="/admin.html" style="display:none">แอดมิน</a>
+      </nav>
+      <script src="/js/nav.js" defer></script>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">เข้าสู่ระบบ</h1>
+
+    <div class="card" style="max-width:640px; margin:auto;">
+      <label class="label" for="loginUser">Username</label>
+      <input id="loginUser" class="input" placeholder="Username" autocomplete="username" />
+
+      <label class="label" for="loginPass">Password</label>
+      <input id="loginPass" class="input" type="password" placeholder="Password" autocomplete="current-password" />
+
+      <div class="actions" style="margin-top:12px">
+        <button id="btnLogin" type="button" class="btn btn-primary" style="width:100%">Login</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2 class="page-title" style="font-size:18px; margin-top:0">ยังไม่มีบัญชี? ลงทะเบียน</h2>
+
+      <div class="row row-2">
+        <div>
+          <label class="label" for="regUser">Username</label>
+          <input id="regUser" class="input" placeholder="Username" autocomplete="username" />
+        </div>
+        <div>
+          <label class="label" for="regPass">Password</label>
+          <input id="regPass" class="input" type="password" placeholder="Password" autocomplete="new-password" />
+        </div>
+      </div>
+
+      <label class="label" for="regName">ชื่อ-นามสกุล</label>
+      <input id="regName" class="input" placeholder="ชื่อ-นามสกุล" />
+
+      <div class="row row-2">
+        <div>
+          <label class="label" for="regPhone">เบอร์โทร (บังคับ)</label>
+          <input id="regPhone" class="input" placeholder="เบอร์โทร (บังคับ)" />
+        </div>
+        <div>
+          <label class="label" for="regEmail">อีเมล (บังคับ)</label>
+          <input id="regEmail" class="input" placeholder="อีเมล (บังคับ)" />
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:12px">
+        <button id="btnRegister" type="button" class="btn btn-outline" style="width:100%">Register</button>
+      </div>
+
+      <p class="muted" style="margin-top:16px">
+        หลังล็อกอิน: ไปหน้า
+        <a class="btn btn-muted" href="/book.html">จองคิว</a>
+        หรือ
+        <a class="btn btn-muted" href="/status.html">เช็คคิวของฉัน</a>
+      </p>
+
+      <p id="msg" class="notice" style="display:none"></p>
+    </div>
+  </main>
+
+  <footer class="footer">© 2025 กรมการขนส่งทางบก — ระบบจองคิวใบขับขี่</footer>
+
+  <script src="/js/index.js" defer></script>
+</body>
+</html>

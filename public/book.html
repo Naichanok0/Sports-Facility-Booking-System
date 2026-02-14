@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>จองคิว | ใบขับขี่</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">DLT</div>
+        <div>
+          <div style="font-size:18px; line-height:1">ระบบจองคิวทำใบขับขี่</div>
+          <div class="muted" style="font-size:12px">กรมการขนส่งทางบก</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/book.html">จองคิว</a>
+        <a href="/status.html">คิวของฉัน</a>
+         <a id="navAdmin" href="/admin.html" style="display:none">แอดมิน</a>
+        <a id="logout" href="/index.html">ออกจากระบบ</a>
+      </nav>
+      <script src="/js/nav.js" defer></script>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">จองคิว</h1>
+    <div class="card">
+      <div class="row row-3">
+        <div>
+          <label class="label">ศูนย์ (Center)</label>
+          <select id="center" class="select"></select>
+        </div>
+        <div>
+          <label class="label">บริการ (Service)</label>
+          <select id="service" class="select"></select>
+        </div>
+        <div>
+          <label class="label">วันที่</label>
+          <input id="date" type="date" class="input" />
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:10px">
+        <button id="btnLoad" class="btn btn-primary">ดูรอบว่าง</button>
+      </div>
+
+      <table class="table" aria-label="ตารางรอบเวลาจอง">
+        <thead>
+          <tr>
+            <th>เวลา</th>
+            <th class="center">จองแล้ว</th>
+            <th class="center">คงเหลือ</th>
+            <th class="center">ดำเนินการ</th>
+          </tr>
+        </thead>
+        <tbody id="slotBody"></tbody>
+      </table>
+
+      <p id="msg" class="notice" style="display:none"></p>
+    </div>
+  </main>
+
+  <footer class="footer">© 2025 กรมการขนส่งทางบก — ระบบจองคิวใบขับขี่</footer>
+
+  <script src="/js/book.js" defer></script>
+</body>
+</html>
