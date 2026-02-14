@@ -1,4 +1,4 @@
-import pino from 'pino';
+const pino = require('pino');
 
 const level = process.env.LOG_LEVEL || 'info';
 
@@ -8,4 +8,4 @@ const logger = pino({
   timestamp: pino.stdTimeFunctions.isoTime
 });
 
-export default logger;
+module.exports = logger;

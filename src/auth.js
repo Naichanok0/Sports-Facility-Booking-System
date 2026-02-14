@@ -1,14 +1,13 @@
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-dotenv.config();
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 /* ---------- สร้าง JWT Token ---------- */
-export function signToken(payload) {
+function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 }
 
 /* ---------- Middleware ตรวจ token (สำหรับผู้ใช้ทั่วไป) ---------- */
-export function authRequired(req, res, next) {
+function authRequired(req, res, next) {
   const hdr = req.headers.authorization || "";
   const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Missing token" });
@@ -22,7 +21,7 @@ export function authRequired(req, res, next) {
 }
 
 /* ---------- ✅ Middleware ตรวจสิทธิ์เฉพาะ admin ---------- */
-export function adminOnly(req, res, next) {
+function adminOnly(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -31,3 +30,5 @@ export function adminOnly(req, res, next) {
   }
   next();
 }
+
+module.exports = { signToken, authRequired, adminOnly };

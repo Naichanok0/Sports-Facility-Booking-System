@@ -1,28 +1,20 @@
-// server.js
-import express from "express";
-import rateLimit from 'express-rate-limit';
-import cors from "cors";
-import helmet from "helmet";
-import dotenv from "dotenv";
-dotenv.config();
-
-import logger from "./src/logger.js";
+// server.js - MongoDB Version
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
+const logger = require('./src/logger');
 
 // Basic environment validation
 if (!process.env.JWT_SECRET) {
-  logger.error('❌ Missing required env: JWT_SECRET. Please set process.env.JWT_SECRET');
+  logger.error('❌ Missing required env: JWT_SECRET');
   process.exit(1);
 }
 
-import path from "path";
-import { fileURLToPath } from "url";
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-import { poolConnect } from "./src/db.js";
-import { router } from "./src/routes.js";
-import adminRoutes from "./src/admin.js"; // ✅ เพิ่ม: เส้นทางสำหรับผู้ดูแลระบบ
-
 const app = express();
+const PORT = process.env.PORT || 3089;
 
 // ใช้ Helmet ปกติ (เราแยกสคริปต์ออกเป็นไฟล์ภายนอกแล้ว)
 app.use(helmet());
@@ -30,68 +22,68 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// ============ Middleware ============
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
-// Logger แบบง่าย
-app.use((req, _res, next) => {
-  logger.info({ method: req.method, url: req.url }, 'incoming request');
+// Logger
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.url}`);
   next();
 });
 
-// ---------- API ----------
-// Rate limit auth endpoints to prevent brute force
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, try again later.' }
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later.'
 });
+app.use('/api/', limiter);
 
-app.use("/api/admin", adminRoutes); // ✅ เพิ่ม: กลุ่ม API แอดมิน (ต้อง auth + role=admin)
-// Apply limiter only to auth routes
-app.use('/api/auth', authLimiter);
-app.use("/api", router);            // กลุ่ม API ปกติ (auth/user)
-
-// ---------- Static Web ----------
-app.use(express.static(path.join(__dirname, "public")));
-
-// (optional) healthcheck
-app.get("/healthz", (_req, res) => res.json({ ok: true }));
-
-// ---------- Error Middleware ----------
-app.use((err, _req, res, _next) => {
-  logger.error(err, '🔥 Unhandled route error');
-  const message = err?.originalError?.info?.message || err.message || "Server error";
-  res.status(500).json({ error: message });
-});
-
-// ---------- Process-level guards ----------
-process.on("unhandledRejection", (r) => logger.error(r, '🧨 UnhandledRejection'));
-process.on("uncaughtException", (e) => {
-  logger.error(e, '💥 UncaughtException');
-  // Exit after logging so the process doesn't stay in a bad state
-  process.exit(1);
-});
-
-// ---------- Start ----------
-const port = process.env.PORT || 3088;
-poolConnect
-  .then(() => {
-    logger.info('✅ Connected to SQL Server');
-    const server = app.listen(port, () => logger.info(`🚀 API & Web running at http://localhost:${port}`));
-
-    // Handle listen errors (e.g., port already in use)
-    server.on('error', (err) => {
-      if (err && err.code === 'EADDRINUSE') {
-        logger.error(`❌ Port ${port} already in use. Set PORT env or free the port.`);
-        process.exit(1);
-      } else {
-        logger.error(err, '❌ Server error');
-        process.exit(1);
-      }
+// ============ MongoDB Connection ============
+async function connectMongo() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      maxPoolSize: 10,
+      minPoolSize: 5
     });
-  })
-  .catch((err) => {
-    logger.error(err, '❌ DB connect failed');
+    logger.info('✅ Connected to MongoDB');
+  } catch (error) {
+    logger.error('❌ MongoDB connection failed:', error.message);
+    console.error('Full error:', error);
     process.exit(1);
-  });
+  }
+}
+
+connectMongo();
+
+// ============ Routes ============
+app.use('/api/auth', require('./src/authRoutes'));
+app.use('/api', require('./src/routes'));
+app.use('/api/admin', require('./src/admin'));
+
+// ============ Health Check ============
+app.get('/health', (req, res) => {
+  res.json({ status: '🚀 API running', timestamp: new Date() });
+});
+
+// ============ Error Handler ============
+app.use((err, req, res, next) => {
+  logger.error('Error:', err);
+  res.status(err.status || 500).json({ error: err.message });
+});
+
+// ============ Start Server ============
+const server = app.listen(PORT, () => {
+  logger.info(`🚀 API & Web running at http://localhost:${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await mongoose.disconnect();
+  logger.info('MongoDB disconnected');
+  process.exit(0);
+});
