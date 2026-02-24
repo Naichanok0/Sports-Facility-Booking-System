@@ -57,7 +57,7 @@ export default function ReportsDashboard() {
         ]);
 
         if (bookingResponse.success && bookingResponse.data) {
-          const bookingData = (bookingResponse.data as any[]) || [];
+          const bookingData = Array.isArray(bookingResponse.data) ? bookingResponse.data : [];
           setBookingStats(bookingData);
           setSummaryStats({
             totalBookings: bookingData.length || 0,
@@ -65,15 +65,21 @@ export default function ReportsDashboard() {
             noShowCount: bookingData.filter((b: any) => b.status === "no-show").length || 0,
             totalPlayers: bookingData.reduce((sum: number, b: any) => sum + (b.playerCount || 0), 0),
           });
+        } else {
+          setBookingStats([]);
         }
 
         if (facilityResponse.success && facilityResponse.data) {
-          const facilityData = (facilityResponse.data as any[]) || [];
+          const facilityData = Array.isArray(facilityResponse.data) ? facilityResponse.data : [];
           setFacilityStats(facilityData);
+        } else {
+          setFacilityStats([]);
         }
       } catch (error: any) {
         console.error("Error fetching statistics:", error);
         toast.error("ไม่สามารถโหลดข้อมูลสถิติได้");
+        setBookingStats([]);
+        setFacilityStats([]);
       } finally {
         setLoading(false);
       }
@@ -254,25 +260,25 @@ export default function ReportsDashboard() {
           <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">08:00 - 10:00</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">
-              {bookingStats.filter((b: any) => b.startTime === "08:00").length} ครั้ง
+              {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "08:00").length : 0} ครั้ง
             </p>
           </div>
           <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">10:00 - 12:00</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">
-              {bookingStats.filter((b: any) => b.startTime === "10:00").length} ครั้ง
+              {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "10:00").length : 0} ครั้ง
             </p>
           </div>
           <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">14:00 - 16:00</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">
-              {bookingStats.filter((b: any) => b.startTime === "14:00").length} ครั้ง
+              {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "14:00").length : 0} ครั้ง
             </p>
           </div>
           <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">16:00 - 18:00</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">
-              {bookingStats.filter((b: any) => b.startTime === "16:00").length} ครั้ง
+              {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "16:00").length : 0} ครั้ง
             </p>
           </div>
         </div>
