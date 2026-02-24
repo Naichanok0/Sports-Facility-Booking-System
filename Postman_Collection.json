@@ -1,0 +1,433 @@
+{
+  "info": {
+    "_postman_id": "sports-facility-api",
+    "name": "Sports Facility Booking API",
+    "description": "API endpoints for Sports Facility Booking System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/users",
+              "host": ["{{BASE_URL}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/users/{{USER_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["users", "{{USER_ID}}"]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"somchai\", \"email\": \"somchai@student.com\", \"firstName\": \"สมชาย\", \"lastName\": \"เรียนดี\", \"phone\": \"0812345678\", \"role\": \"user\", \"studentId\": \"6501001\", \"barcode\": \"6501001\", \"faculty\": \"Engineering\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/users",
+              "host": ["{{BASE_URL}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"firstName\": \"สมชายใหม่\", \"phone\": \"0898765432\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/users/{{USER_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["users", "{{USER_ID}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/users/{{USER_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["users", "{{USER_ID}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sport Types",
+      "item": [
+        {
+          "name": "Get All Sport Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/sport-types",
+              "host": ["{{BASE_URL}}"],
+              "path": ["sport-types"]
+            }
+          }
+        },
+        {
+          "name": "Get Sport Type by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/sport-types/{{SPORT_TYPE_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["sport-types", "{{SPORT_TYPE_ID}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Sport Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"วอลเลย์บอล\", \"description\": \"วอลเลย์บอลในร่ม\", \"icon\": \"volleyball.png\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/sport-types",
+              "host": ["{{BASE_URL}}"],
+              "path": ["sport-types"]
+            }
+          }
+        },
+        {
+          "name": "Update Sport Type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"วอลเลย์บอล\", \"isActive\": true}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/sport-types/{{SPORT_TYPE_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["sport-types", "{{SPORT_TYPE_ID}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Facilities",
+      "item": [
+        {
+          "name": "Get All Facilities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/facilities",
+              "host": ["{{BASE_URL}}"],
+              "path": ["facilities"]
+            }
+          }
+        },
+        {
+          "name": "Get Facility by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/facilities/{{FACILITY_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["facilities", "{{FACILITY_ID}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Facility",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"สนามฟุตบอล 1\", \"location\": \"เขตสีลม\", \"sportTypeId\": \"{{SPORT_TYPE_ID}}\", \"maxCapacity\": 22, \"pricePerHour\": 500, \"operatingHours\": {\"openTime\": \"06:00\", \"closeTime\": \"22:00\"}, \"notes\": \"สนามหญ้าธรรมชาติ\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/facilities",
+              "host": ["{{BASE_URL}}"],
+              "path": ["facilities"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reservations",
+      "item": [
+        {
+          "name": "Get All Reservations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/reservations",
+              "host": ["{{BASE_URL}}"],
+              "path": ["reservations"]
+            }
+          }
+        },
+        {
+          "name": "Create Reservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\": \"{{USER_ID}}\", \"facilityId\": \"{{FACILITY_ID}}\", \"sportTypeId\": \"{{SPORT_TYPE_ID}}\", \"date\": \"2026-02-23\", \"startTime\": \"14:00\", \"endTime\": \"16:00\", \"playerCount\": 10}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/reservations",
+              "host": ["{{BASE_URL}}"],
+              "path": ["reservations"]
+            }
+          }
+        },
+        {
+          "name": "Update Reservation Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\": \"confirmed\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/reservations/{{RESERVATION_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["reservations", "{{RESERVATION_ID}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Queues",
+      "item": [
+        {
+          "name": "Join Queue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reservationId\": \"{{RESERVATION_ID}}\", \"userId\": \"{{USER_ID}}\", \"facilityId\": \"{{FACILITY_ID}}\", \"playerName\": \"วิชิต ขยัน\", \"playerBarcode\": \"6501003\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/queues/join",
+              "host": ["{{BASE_URL}}"],
+              "path": ["queues", "join"]
+            }
+          }
+        },
+        {
+          "name": "Get Queue by Reservation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/queues/reservation/{{RESERVATION_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["queues", "reservation", "{{RESERVATION_ID}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CheckIn",
+      "item": [
+        {
+          "name": "Check In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reservationId\": \"{{RESERVATION_ID}}\", \"userId\": \"{{USER_ID}}\", \"facilityId\": \"{{FACILITY_ID}}\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/checkins/checkin",
+              "host": ["{{BASE_URL}}"],
+              "path": ["checkins", "checkin"]
+            }
+          }
+        },
+        {
+          "name": "Check Out",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/checkins/{{CHECKIN_ID}}/checkout",
+              "host": ["{{BASE_URL}}"],
+              "path": ["checkins", "{{CHECKIN_ID}}", "checkout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cancellations",
+      "item": [
+        {
+          "name": "Request Cancellation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reservationId\": \"{{RESERVATION_ID}}\", \"userId\": \"{{USER_ID}}\", \"facilityId\": \"{{FACILITY_ID}}\", \"reason\": \"ไม่สามารถไปได้\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/cancellations",
+              "host": ["{{BASE_URL}}"],
+              "path": ["cancellations"]
+            }
+          }
+        },
+        {
+          "name": "Approve Cancellation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"approvedBy\": \"{{ADMIN_ID}}\"}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/cancellations/{{CANCELLATION_ID}}/approve",
+              "host": ["{{BASE_URL}}"],
+              "path": ["cancellations", "{{CANCELLATION_ID}}", "approve"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:3089/api",
+      "type": "string"
+    },
+    {
+      "key": "USER_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "FACILITY_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "SPORT_TYPE_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "RESERVATION_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "CHECKIN_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ADMIN_ID",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

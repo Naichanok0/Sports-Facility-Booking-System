@@ -21,7 +21,9 @@ const reservationSchema = new mongoose.Schema({
     ref: 'SportType', 
     required: true 
   },
-  bookingDate: { 
+  
+  // Booking Details
+  date: { 
     type: Date, 
     required: true 
   },
@@ -37,15 +39,33 @@ const reservationSchema = new mongoose.Schema({
     type: Number, 
     required: true 
   },
-  numPlayers: { 
+  playerCount: { 
     type: Number, 
     required: true 
   },
+  
+  // Status Tracking
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+    enum: ['pending', 'confirmed', 'checked-in', 'completed', 'cancelled', 'no-show'],
     default: 'pending'
   },
+  
+  // Check-in Information
+  checkInTime: {
+    type: Date
+  },
+  checkInMethod: {
+    type: String,
+    enum: ['barcode', 'manual'],
+    default: null
+  },
+  checkedInBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  
+  // Cancellation Information
   cancellationReason: String,
   cancelledBy: { 
     type: String, 
@@ -53,24 +73,33 @@ const reservationSchema = new mongoose.Schema({
     default: null 
   },
   cancelledAt: Date,
+  
+  // Penalty System
   penaltyAmount: { 
     type: Number, 
     default: 0 
   },
+  penaltyReason: String,
+  
+  // Additional Info
   notes: String,
+  
+  // Timestamps
+  confirmedAt: Date,
   createdAt: { 
     type: Date, 
     default: Date.now 
   },
-  confirmedAt: Date,
   updatedAt: { 
     type: Date, 
     default: Date.now 
   }
 }, { collection: 'reservations' });
 
-reservationSchema.index({ userId: 1, bookingDate: 1 });
-reservationSchema.index({ facilityId: 1, bookingDate: 1, startTime: 1 });
+// Indexes for faster queries
+reservationSchema.index({ userId: 1, date: -1 });
+reservationSchema.index({ facilityId: 1, date: 1, startTime: 1 });
 reservationSchema.index({ status: 1, createdAt: -1 });
+reservationSchema.index({ reservationNo: 1 });
 
 module.exports = mongoose.model('Reservation', reservationSchema);

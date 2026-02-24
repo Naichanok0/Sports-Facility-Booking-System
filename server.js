@@ -61,7 +61,22 @@ async function connectMongo() {
 connectMongo();
 
 // ============ Routes ============
+// Auth Routes
 app.use('/api/auth', require('./src/authRoutes'));
+
+// API Routes
+app.use('/api/users', require('./src/api/userApi'));
+app.use('/api/sport-types', require('./src/api/sportTypeApi'));
+app.use('/api/facilities', require('./src/api/facilityApi'));
+app.use('/api/reservations', require('./src/api/reservationApi'));
+app.use('/api/queues', require('./src/api/queueApi'));
+app.use('/api/checkins', require('./src/api/checkinApi'));
+app.use('/api/cancellations', require('./src/api/cancellationApi'));
+
+// Existing Routes
+app.use('/api/user', require('./src/userRoutes'));
+app.use('/api/facility-staff', require('./src/facilityStaffRoutes'));
+app.use('/api/queue', require('./src/queueRoutes'));
 app.use('/api', require('./src/routes'));
 app.use('/api/admin', require('./src/admin'));
 
@@ -73,7 +88,11 @@ app.get('/health', (req, res) => {
 // ============ Error Handler ============
 app.use((err, req, res, next) => {
   logger.error('Error:', err);
-  res.status(err.status || 500).json({ error: err.message });
+  res.status(err.status || 500).json({ 
+    success: false, 
+    error: err.message,
+    code: err.code || 'INTERNAL_ERROR'
+  });
 });
 
 // ============ Start Server ============

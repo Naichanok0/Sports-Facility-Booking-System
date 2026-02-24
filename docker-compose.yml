@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: sports-facility-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - sports-facility-network
+
+  # MongoDB Express UI (optional)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: sports-facility-mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongodb:27017/
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+    depends_on:
+      - mongodb
+    networks:
+      - sports-facility-network
+
+  # Backend Node.js API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sports-facility-backend
+    restart: always
+    ports:
+      - "3089:3089"
+    environment:
+      PORT: 3089
+      NODE_ENV: development
+      MONGODB_URI: mongodb://admin:admin123@mongodb:27017/Booking?authSource=admin
+      JWT_SECRET: your_super_secret_jwt_key_change_this_in_production
+    depends_on:
+      - mongodb
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+    networks:
+      - sports-facility-network
+
+  # Frontend React (development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sports-facility-frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3089/api
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    networks:
+      - sports-facility-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  sports-facility-network:
+    driver: bridge

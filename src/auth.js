@@ -10,25 +10,41 @@ function signToken(payload) {
 function authRequired(req, res, next) {
   const hdr = req.headers.authorization || "";
   const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) return res.status(401).json({ success: false, error: "Missing token" });
 
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch (e) {
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(401).json({ success: false, error: "Invalid token" });
   }
 }
 
 /* ---------- ✅ Middleware ตรวจสิทธิ์เฉพาะ admin ---------- */
 function adminOnly(req, res, next) {
   if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ success: false, error: "Unauthorized" });
   }
   if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden: admin only" });
+    return res.status(403).json({ success: false, error: "Forbidden: admin only" });
   }
   next();
 }
 
-module.exports = { signToken, authRequired, adminOnly };
+/* ---------- Middleware ตรวจสิทธิ์สำหรับบทบาทหลายอย่าง ---------- */
+function roleRequired(roles = []) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Forbidden: requires one of ${roles.join(', ')}` 
+      });
+    }
+    next();
+  };
+}
+
+module.exports = { signToken, authRequired, adminOnly, roleRequired };
