@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { MobileTable } from "../ui/MobileTable";
 import { Search, Loader2, AlertCircle, CheckCircle, Trash2 } from "lucide-react";
 import { reservationAPI, userAPI } from "../../../services/api";
 import { toast } from "sonner";
@@ -286,122 +287,121 @@ export default function BookingMonitor() {
               <SelectContent>
                 <SelectItem value="all">สถานะทั้งหมด</SelectItem>
                 <SelectItem value="confirmed">จองแล้ว</SelectItem>
-              <SelectItem value="checked-in">เช็คอินแล้ว</SelectItem>
-              <SelectItem value="completed">ใช้งานแล้ว</SelectItem>
-              <SelectItem value="no-show">ไม่มา</SelectItem>
-              <SelectItem value="cancelled">ยกเลิก</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+                <SelectItem value="checked-in">เช็คอินแล้ว</SelectItem>
+                <SelectItem value="completed">ใช้งานแล้ว</SelectItem>
+                <SelectItem value="no-show">ไม่มา</SelectItem>
+                <SelectItem value="cancelled">ยกเลิก</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
-                <TableHead>วันที่</TableHead>
-                <TableHead>เวลา</TableHead>
-                <TableHead>สนาม</TableHead>
-                <TableHead>ผู้จอง</TableHead>
-                <TableHead>สถานะ</TableHead>
-                <TableHead>เช็คอิน</TableHead>
-                <TableHead className="text-right">การดำเนินการ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBookings.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
-                    ไม่พบข้อมูลการจอง
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredBookings.map((booking) => (
-                  <TableRow key={booking.id} className="hover:bg-teal-50/50">
-                    <TableCell>
-                      {new Date(booking.date).toLocaleDateString("th-TH", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {booking.startTime} - {booking.endTime}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {booking.facilityName}
-                    </TableCell>
-                    <TableCell>{booking.userName}</TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`${statusConfig[booking.status].color} hover:${statusConfig[booking.status].color}`}
-                      >
-                        {statusConfig[booking.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {booking.checkInTime ? (
-                        <span className="text-sm text-green-600">
-                          {booking.checkInTime}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      {booking.status === "confirmed" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCheckIn(booking.id)}
-                          disabled={actionLoading === booking.id}
-                          className="border-green-200 text-green-600 hover:bg-green-50"
-                        >
-                          {actionLoading === booking.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                          )}
-                          เช็คอิน
-                        </Button>
-                      )}
-                      {booking.status !== "completed" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCancel(booking.id)}
-                          disabled={actionLoading === booking.id}
-                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
-                        >
-                          {actionLoading === booking.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <AlertCircle className="w-4 h-4 mr-1" />
-                          )}
-                          ยกเลิก
-                        </Button>
-                      )}
+          <MobileTable
+            columns={[
+              {
+                key: "date",
+                label: "วันที่",
+                render: (value, row) =>
+                  new Date(row.date).toLocaleDateString("th-TH", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  }),
+              },
+              {
+                key: "time",
+                label: "เวลา",
+                render: (value, row) => `${row.startTime} - ${row.endTime}`,
+              },
+              {
+                key: "facilityName",
+                label: "สนาม",
+              },
+              {
+                key: "userName",
+                label: "ผู้จอง",
+              },
+              {
+                key: "status",
+                label: "สถานะ",
+                render: (value, row) => {
+                  const status = row.status as keyof typeof statusConfig;
+                  return (
+                    <Badge className={`${statusConfig[status]?.color || 'bg-gray-500'}`}>
+                      {statusConfig[status]?.label || value}
+                    </Badge>
+                  );
+                },
+              },
+              {
+                key: "checkInTime",
+                label: "เช็คอิน",
+                render: (value) =>
+                  value ? (
+                    <span className="text-sm text-green-600">{value}</span>
+                  ) : (
+                    <span className="text-sm text-gray-400">-</span>
+                  ),
+              },
+              {
+                key: "actions",
+                label: "การดำเนินการ",
+                render: (value, row) => (
+                  <div className="flex flex-col md:flex-row gap-1">
+                    {row.status === "confirmed" && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDelete(booking.id)}
-                        disabled={actionLoading === booking.id}
-                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => handleCheckIn(row.id)}
+                        disabled={actionLoading === row.id}
+                        className="border-green-200 text-green-600 hover:bg-green-50 whitespace-nowrap text-xs"
                       >
-                        {actionLoading === booking.id ? (
+                        {actionLoading === row.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Trash2 className="w-4 h-4 mr-1" />
+                          <CheckCircle className="w-4 h-4 mr-1" />
                         )}
-                        ลบ
+                        เช็คอิน
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+                    )}
+                    {row.status !== "completed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCancel(row.id)}
+                        disabled={actionLoading === row.id}
+                        className="border-orange-200 text-orange-600 hover:bg-orange-50 whitespace-nowrap text-xs"
+                      >
+                        {actionLoading === row.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 mr-1" />
+                        )}
+                        ยกเลิก
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDelete(row.id)}
+                      disabled={actionLoading === row.id}
+                      className="border-red-200 text-red-600 hover:bg-red-50 whitespace-nowrap text-xs"
+                    >
+                      {actionLoading === row.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4 mr-1" />
+                      )}
+                      ลบ
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+            data={filteredBookings}
+            loading={false}
+            emptyMessage="ไม่พบข้อมูลการจอง"
+          />
+        </Card>
       )}
     </div>
   );

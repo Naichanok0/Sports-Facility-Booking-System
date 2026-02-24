@@ -239,37 +239,39 @@ export default function BookingPage({ user }: BookingPageProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">จองสนามกีฬา</h2>
+    <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-800">จองสนามกีฬา</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Date and Facility Selection */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card className="p-4 border-2 border-teal-50">
-            <Label className="text-gray-700 font-medium mb-2 block">
+        <div className="lg:col-span-1 space-y-3 sm:space-y-4">
+          <Card className="p-3 sm:p-4 border-2 border-teal-50">
+            <Label className="text-sm sm:text-base text-gray-700 font-medium mb-2 block">
               เลือกวันที่
             </Label>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              disabled={(date) => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const maxDate = new Date(today);
-                maxDate.setDate(maxDate.getDate() + 2);
-                return date < today || date > maxDate;
-              }}
-              className="rounded-md border-2 border-teal-100"
-            />
+            <div className="overflow-x-auto">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                disabled={(date) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const maxDate = new Date(today);
+                  maxDate.setDate(maxDate.getDate() + 2);
+                  return date < today || date > maxDate;
+                }}
+                className="rounded-md border-2 border-teal-100 w-full"
+              />
+            </div>
           </Card>
 
-          <Card className="p-4 border-2 border-teal-50">
-            <Label className="text-gray-700 font-medium mb-2 block">
+          <Card className="p-3 sm:p-4 border-2 border-teal-50">
+            <Label className="text-sm sm:text-base text-gray-700 font-medium mb-2 block">
               กรองตามชนิดกีฬา
             </Label>
             <Select value={selectedSportType} onValueChange={setSelectedSportType}>
-              <SelectTrigger className="border-teal-200 focus:border-teal-500">
+              <SelectTrigger className="border-teal-200 focus:border-teal-500 text-sm">
                 <SelectValue placeholder="ทุกชนิดกีฬา" />
               </SelectTrigger>
               <SelectContent>
@@ -285,49 +287,49 @@ export default function BookingPage({ user }: BookingPageProps) {
         </div>
 
         {/* Available Facilities and Time Slots */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-3 sm:space-y-4">
           {loading ? (
-            <Card className="p-5 border-2 border-teal-50">
+            <Card className="p-3 sm:p-5 border-2 border-teal-50">
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>กำลังโหลดข้อมูล...</span>
+                <span className="text-sm">กำลังโหลดข้อมูล...</span>
               </div>
             </Card>
           ) : (
             <>
-          <Card className="p-5 border-2 border-teal-50">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-800">เลือกสนาม</h3>
-              <Badge className="bg-gradient-to-r from-teal-500 to-blue-500">
-                {format(selectedDate, "d MMMM yyyy", { locale: th })}
-              </Badge>
-            </div>
+              <Card className="p-3 sm:p-5 border-2 border-teal-50">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 mb-4">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-800">เลือกสนาม</h3>
+                  <Badge className="bg-gradient-to-r from-teal-500 to-blue-500 text-xs sm:text-sm">
+                    {format(selectedDate, "d MMMM yyyy", { locale: th })}
+                  </Badge>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-              {filteredFacilities.map((facility) => (
-                <button
-                  key={facility._id || facility.id}
-                  onClick={() => setSelectedFacility(facility._id || facility.id || "")}
-                  className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedFacility === (facility._id || facility.id)
-                      ? "border-teal-500 bg-gradient-to-br from-teal-50 to-blue-50 shadow-md"
-                      : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/30"
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-gray-800">
-                        {facility.name}
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {facility.sportTypeName}
-                      </p>
-                      <p className="text-xs text-teal-600 mt-1">
-                        <Users className="w-3 h-3 inline mr-1" />
-                        ต้องการ {facility.requiredPlayers} คน
-                      </p>
-                    </div>
-                    {selectedFacility === facility.id && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                  {filteredFacilities.map((facility) => (
+                    <button
+                      key={facility._id || facility.id}
+                      onClick={() => setSelectedFacility(facility._id || facility.id || "")}
+                      className={`p-3 sm:p-4 border-2 rounded-lg text-left transition-all text-sm sm:text-base ${
+                        selectedFacility === (facility._id || facility.id)
+                          ? "border-teal-500 bg-gradient-to-br from-teal-50 to-blue-50 shadow-md"
+                          : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/30"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-gray-800 text-sm sm:text-base">
+                            {facility.name}
+                          </h4>
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            {facility.sportTypeName}
+                          </p>
+                          <p className="text-xs text-teal-600 mt-1">
+                            <Users className="w-3 h-3 inline mr-1" />
+                            ต้องการ {facility.requiredPlayers} คน
+                          </p>
+                        </div>
+                        {selectedFacility === facility.id && (
                       <CheckCircle className="w-5 h-5 text-teal-500" />
                     )}
                   </div>
@@ -337,16 +339,16 @@ export default function BookingPage({ user }: BookingPageProps) {
 
             {selectedFacility && (
               <>
-                <h3 className="text-lg font-bold text-gray-800 mb-3">
+                <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-3">
                   เลือกช่วงเวลา
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                   {timeSlots.map((slot, index) => (
                     <button
                       key={index}
                       onClick={() => slot.available && setSelectedTimeSlot(slot)}
                       disabled={!slot.available}
-                      className={`p-3 border-2 rounded-lg transition-all ${
+                      className={`p-2 sm:p-3 border-2 rounded-lg transition-all text-sm ${
                         selectedTimeSlot?.start === slot.start
                           ? "border-teal-500 bg-gradient-to-br from-teal-50 to-blue-50"
                           : slot.available
@@ -355,8 +357,8 @@ export default function BookingPage({ user }: BookingPageProps) {
                       }`}
                     >
                       <div className="flex items-center justify-center">
-                        <Clock className="w-4 h-4 mr-2" />
-                        <span className="font-medium">
+                        <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                        <span className="font-medium text-xs sm:text-sm">
                           {slot.start} - {slot.end}
                         </span>
                       </div>
@@ -372,29 +374,29 @@ export default function BookingPage({ user }: BookingPageProps) {
             )}
 
             {selectedFacility && selectedTimeSlot && (
-              <div className="mt-6 p-4 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border-2 border-teal-100">
-                <h4 className="font-bold text-gray-800 mb-2">สรุปการจอง</h4>
-                <div className="space-y-1 text-sm text-gray-700">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border-2 border-teal-100">
+                <h4 className="font-bold text-gray-800 mb-2 text-sm sm:text-base">สรุปการจอง</h4>
+                <div className="space-y-1 text-xs sm:text-sm text-gray-700">
                   <p>
-                    <MapPin className="w-4 h-4 inline mr-1" />
+                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                     {selectedFacilityData?.name}
                   </p>
                   <p>
-                    <CalendarIcon className="w-4 h-4 inline mr-1" />
+                    <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                     {format(selectedDate, "d MMMM yyyy", { locale: th })}
                   </p>
                   <p>
-                    <Clock className="w-4 h-4 inline mr-1" />
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                     {selectedTimeSlot.start} - {selectedTimeSlot.end}
                   </p>
                   <p>
-                    <Users className="w-4 h-4 inline mr-1" />
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                     จำนวนผู้เล่น: {selectedFacilityData?.requiredPlayers} คน
                   </p>
                 </div>
                 <Button
                   onClick={handleBooking}
-                  className="w-full mt-4 bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white"
+                  className="w-full mt-3 sm:mt-4 bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white text-sm sm:text-base"
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   สร้างการจอง

@@ -74,7 +74,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-cyan-50">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-cyan-50 overflow-hidden">
       {!currentUser ? (
         <LoginPage onLogin={setCurrentUser} />
       ) : currentUser.role === "admin" ? (
