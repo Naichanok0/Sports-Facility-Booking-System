@@ -81,7 +81,7 @@ export default function BookingMonitor() {
     }
   };
 
-  // Handle delete/cancel
+  // Handle cancel (change status)
   const handleCancel = async (bookingId: string) => {
     if (!confirm("คุณต้องการยกเลิกการจองนี้ใช่หรือไม่?")) {
       return;
@@ -95,13 +95,43 @@ export default function BookingMonitor() {
         throw new Error(response.error || "Failed to cancel");
       }
       
-      // Remove from local state immediately
-      setBookings(bookings.filter(b => b.id !== bookingId));
+      // Update local state - change status to cancelled
+      setBookings(bookings.map(b => 
+        b.id === bookingId 
+          ? { ...b, status: "cancelled" }
+          : b
+      ));
       
-      toast.success("ยกเลิกการจองและลบรายการสำเร็จ");
+      toast.success("ยกเลิกการจองสำเร็จ");
     } catch (err: any) {
       toast.error(err.message || "Failed to cancel");
       console.error("Cancel error:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle permanent delete
+  const handleDelete = async (bookingId: string) => {
+    if (!confirm("คุณต้องการลบรายการนี้ออกจากระบบหรือไม่? ไม่สามารถกู้คืนได้")) {
+      return;
+    }
+    
+    try {
+      setActionLoading(bookingId);
+      const response = await reservationAPI.delete(bookingId);
+      
+      if (!response.success) {
+        throw new Error(response.error || "Failed to delete");
+      }
+      
+      // Remove from local state immediately
+      setBookings(bookings.filter(b => b.id !== bookingId));
+      
+      toast.success("ลบรายการสำเร็จ");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete");
+      console.error("Delete error:", err);
     } finally {
       setActionLoading(null);
     }
@@ -334,22 +364,36 @@ export default function BookingMonitor() {
                           เช็คอิน
                         </Button>
                       )}
-                      {booking.status !== "cancelled" && booking.status !== "completed" && (
+                      {booking.status !== "completed" && (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleCancel(booking.id)}
                           disabled={actionLoading === booking.id}
-                          className="border-red-200 text-red-600 hover:bg-red-50"
+                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
                         >
                           {actionLoading === booking.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Trash2 className="w-4 h-4 mr-1" />
+                            <AlertCircle className="w-4 h-4 mr-1" />
                           )}
                           ยกเลิก
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(booking.id)}
+                        disabled={actionLoading === booking.id}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        {actionLoading === booking.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 mr-1" />
+                        )}
+                        ลบ
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

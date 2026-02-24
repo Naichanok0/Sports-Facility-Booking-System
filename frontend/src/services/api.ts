@@ -136,6 +136,9 @@ export const reservationAPI = {
     method: 'PUT',
     body: JSON.stringify({ reason })
   }),
+  delete: (id: string) => apiCall(`/reservations/${id}`, {
+    method: 'DELETE'
+  }),
   getUserReservations: (userId: string) => apiCall(`/reservations/user/${userId}`),
   getFacilityReservations: (facilityId: string, date: string) =>
     apiCall(`/reservations/facility/${facilityId}/date/${date}`),

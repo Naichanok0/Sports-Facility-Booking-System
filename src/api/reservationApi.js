@@ -278,6 +278,33 @@ router.put('/:id/cancel', async (req, res) => {
   }
 });
 
+// ✅ DELETE reservation permanently
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedReservation = await Reservation.findByIdAndDelete(req.params.id);
+
+    if (!deletedReservation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Reservation not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reservation deleted successfully',
+      data: deletedReservation
+    });
+  } catch (error) {
+    logger.error('Error deleting reservation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting reservation',
+      error: error.message
+    });
+  }
+});
+
 // ✅ GET user's reservations
 router.get('/user/:userId', async (req, res) => {
   try {
