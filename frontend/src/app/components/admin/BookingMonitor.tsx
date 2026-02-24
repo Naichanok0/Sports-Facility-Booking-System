@@ -56,25 +56,38 @@ export default function BookingMonitor() {
         setLoading(true);
         setError(null);
 
+        // Fetch all users first for name lookup
+        const usersRes = await userAPI.getAll();
+        let userData: any[] = [];
+        if (usersRes.success && Array.isArray(usersRes.data)) {
+          userData = usersRes.data;
+          setUsers(userData);
+        }
+
         // Fetch all reservations
         const reservationsRes = await reservationAPI.getAll();
         if (!reservationsRes.success || !Array.isArray(reservationsRes.data)) {
           throw new Error(reservationsRes.error || "Failed to fetch reservations");
         }
 
-        // Fetch all users for name lookup
-        const usersRes = await userAPI.getAll();
-        if (usersRes.success && Array.isArray(usersRes.data)) {
-          setUsers(usersRes.data);
-        }
-
         // Transform reservations to booking format
         const bookingData: Booking[] = (reservationsRes.data || []).map((res: any) => {
-          const user = users.find((u) => u._id === res.userId);
+          const user = userData.find((u) => u._id === res.userId);
+          
+          // Extract facility name from populated data or fallback
+          let facilityName = "Unknown Facility";
+          if (res.facilityId) {
+            if (typeof res.facilityId === 'object' && res.facilityId.name) {
+              facilityName = res.facilityId.name;
+            } else if (res.facilityName) {
+              facilityName = res.facilityName;
+            }
+          }
+          
           return {
             id: res._id,
-            facilityId: res.facilityId,
-            facilityName: res.facilityName || "Unknown Facility",
+            facilityId: typeof res.facilityId === 'object' ? res.facilityId._id : res.facilityId,
+            facilityName: facilityName,
             userId: res.userId,
             userName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
             date: res.date,
@@ -95,7 +108,7 @@ export default function BookingMonitor() {
     };
 
     fetchData();
-  }, [users]);
+  }, []);
 
   const filteredBookings = bookings.filter((booking) => {
     const matchesSearch =
