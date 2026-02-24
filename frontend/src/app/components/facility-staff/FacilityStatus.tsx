@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { CheckCircle, XCircle, Wrench, MapPin } from "lucide-react";
+import { CheckCircle, XCircle, Wrench, MapPin, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { facilityAPI } from "../../../services/api";
 
 interface Facility {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   sportType: string;
   status: "available" | "in-use" | "maintenance";
@@ -20,56 +22,8 @@ interface Facility {
     startTime: string;
     endTime: string;
   };
-  location: string;
+  location?: string;
 }
-
-const mockFacilities: Facility[] = [
-  {
-    id: "1",
-    name: "สนามฟุตบอล 1",
-    sportType: "ฟุตบอล",
-    status: "available",
-    nextBooking: {
-      userName: "สมหญิง รักเรียน",
-      startTime: "14:00",
-      endTime: "16:00",
-    },
-    location: "อาคารกีฬา ชั้น 1",
-  },
-  {
-    id: "2",
-    name: "สนามบาสเกตบอล A",
-    sportType: "บาสเกตบอล",
-    status: "available",
-    nextBooking: {
-      userName: "ประเสริฐ กีฬาดี",
-      startTime: "16:00",
-      endTime: "17:30",
-    },
-    location: "อาคารกีฬา ชั้น 2",
-  },
-  {
-    id: "3",
-    name: "คอร์ทแบดมินตัน 1",
-    sportType: "แบดมินตัน",
-    status: "available",
-    location: "อาคารกีฬา ชั้น 3",
-  },
-  {
-    id: "4",
-    name: "คอร์ทแบดมินตัน 2",
-    sportType: "แบดมินตัน",
-    status: "available",
-    location: "อาคารกีฬา ชั้น 3",
-  },
-  {
-    id: "5",
-    name: "สนามเทนนิส 1",
-    sportType: "เทนนิส",
-    status: "maintenance",
-    location: "สนามกลางแจ้ง",
-  },
-];
 
 const statusConfig = {
   available: {
@@ -90,28 +44,76 @@ const statusConfig = {
 };
 
 export default function FacilityStatus() {
-  const [facilities, setFacilities] = useState<Facility[]>(mockFacilities);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const toggleMaintenance = (facilityId: string) => {
-    setFacilities(
-      facilities.map((f) =>
-        f.id === facilityId
-          ? {
-              ...f,
-              status:
-                f.status === "maintenance" ? "available" : "maintenance",
-            }
-          : f
-      )
-    );
+  // Fetch facilities
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    const facility = facilities.find((f) => f.id === facilityId);
-    if (facility) {
-      toast.success(
-        facility.status === "maintenance"
-          ? `เปิดใช้งาน ${facility.name} แล้ว`
-          : `ปิดปรับปรุง ${facility.name} แล้ว`
+        const response = await facilityAPI.getAll();
+        if (!response.success || !Array.isArray(response.data)) {
+          throw new Error(response.error || "Failed to fetch facilities");
+        }
+
+        // Map MongoDB data to Facility interface
+        const facilitiesData: Facility[] = (response.data || []).map((fac: any) => ({
+          _id: fac._id,
+          id: fac._id,
+          name: fac.name,
+          sportType: fac.sportType,
+          status: fac.status || "available",
+          location: fac.location,
+        }));
+
+        setFacilities(facilitiesData);
+      } catch (err: any) {
+        console.error("Error fetching facilities:", err);
+        setError(err.message || "Failed to load facilities");
+        toast.error("ไม่สามารถโหลดสนามกีฬาได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFacilities();
+  }, []);
+
+  const toggleMaintenance = async (facilityId: string) => {
+    try {
+      const facility = facilities.find((f) => f._id === facilityId);
+      if (!facility) return;
+
+      const newStatus = facility.status === "maintenance" ? "available" : "maintenance";
+
+      // Update on server
+      const result = await facilityAPI.update(facilityId, {
+        status: newStatus,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update facility");
+      }
+
+      // Update local state
+      setFacilities(
+        facilities.map((f) =>
+          f._id === facilityId ? { ...f, status: newStatus } : f
+        )
       );
+
+      toast.success(
+        newStatus === "maintenance"
+          ? `ปิดปรับปรุง ${facility.name} แล้ว`
+          : `เปิดใช้งาน ${facility.name} แล้ว`
+      );
+    } catch (err: any) {
+      console.error("Error updating facility:", err);
+      toast.error(err.message || "ไม่สามารถอัปเดตสนามได้");
     }
   };
 
@@ -126,39 +128,59 @@ export default function FacilityStatus() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-800">สถานะสนามกีฬา</h2>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
-          <p className="text-sm text-gray-600">ทั้งหมด</p>
-          <p className="text-3xl font-bold text-gray-800 mt-1">
-            {stats.total}
-          </p>
-        </Card>
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
-          <p className="text-sm text-gray-600">พร้อมใช้งาน</p>
-          <p className="text-3xl font-bold text-green-600 mt-1">
-            {stats.available}
-          </p>
+      {loading ? (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </div>
         </Card>
+      ) : (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
+              <p className="text-sm text-gray-600">ทั้งหมด</p>
+              <p className="text-3xl font-bold text-gray-800 mt-1">
+                {stats.total}
+              </p>
+            </Card>
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
-          <p className="text-sm text-gray-600">กำลังใช้งาน</p>
-          <p className="text-3xl font-bold text-blue-600 mt-1">
-            {stats.inUse}
-          </p>
-        </Card>
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
+              <p className="text-sm text-gray-600">พร้อมใช้งาน</p>
+              <p className="text-3xl font-bold text-green-600 mt-1">
+                {stats.available}
+              </p>
+            </Card>
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-orange-50 to-white">
-          <p className="text-sm text-gray-600">ปิดปรับปรุง</p>
-          <p className="text-3xl font-bold text-orange-600 mt-1">
-            {stats.maintenance}
-          </p>
-        </Card>
-      </div>
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
+              <p className="text-sm text-gray-600">กำลังใช้งาน</p>
+              <p className="text-3xl font-bold text-blue-600 mt-1">
+                {stats.inUse}
+              </p>
+            </Card>
 
-      {/* Facilities Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-orange-50 to-white">
+              <p className="text-sm text-gray-600">ปิดปรับปรุง</p>
+              <p className="text-3xl font-bold text-orange-600 mt-1">
+                {stats.maintenance}
+              </p>
+            </Card>
+          </div>
+
+          {/* Facilities Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {facilities.map((facility) => {
           const config = statusConfig[facility.status];
           const StatusIcon = config.icon;
@@ -217,7 +239,7 @@ export default function FacilityStatus() {
 
               {facility.status !== "in-use" && (
                 <Button
-                  onClick={() => toggleMaintenance(facility.id)}
+                  onClick={() => toggleMaintenance(facility._id!)}
                   variant="outline"
                   size="sm"
                   className={`w-full ${
@@ -236,6 +258,8 @@ export default function FacilityStatus() {
           );
         })}
       </div>
+        </>
+      )}
     </div>
   );
 }

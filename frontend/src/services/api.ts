@@ -28,10 +28,20 @@ export async function apiCall<T>(
       ...options,
     });
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (e) {
+      // If response is not JSON, create a simple error object
+      data = {
+        success: false,
+        message: `HTTP error! status: ${response.status}`,
+        error: `HTTP ${response.status}`
+      };
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
     }
 
     return data;
@@ -52,6 +62,10 @@ export const userAPI = {
   getAll: () => apiCall('/users'),
   getById: (id: string) => apiCall(`/users/${id}`),
   getByUsername: (username: string) => apiCall(`/users/profile/${username}`),
+  login: (username: string, password: string) => apiCall('/users/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password })
+  }),
   create: (data: any) => apiCall('/users', {
     method: 'POST',
     body: JSON.stringify(data)
@@ -124,7 +138,11 @@ export const reservationAPI = {
   }),
   getUserReservations: (userId: string) => apiCall(`/reservations/user/${userId}`),
   getFacilityReservations: (facilityId: string, date: string) =>
-    apiCall(`/reservations/facility/${facilityId}/date/${date}`)
+    apiCall(`/reservations/facility/${facilityId}/date/${date}`),
+  getAvailableSlots: (facilityId: string, date: string) =>
+    apiCall(`/reservations/available-slots/${facilityId}?date=${date}`),
+  getAvailable: (query?: string) =>
+    apiCall(`/reservations/available/bookings${query ? '?' + query : ''}`)
 };
 
 /**
@@ -193,6 +211,28 @@ export const cancellationAPI = {
   getPending: () => apiCall('/cancellations/status/pending'),
   getUserCancellations: (userId: string) =>
     apiCall(`/cancellations/user/${userId}`)
+};
+
+/**
+ * Statistics API Service
+ */
+export const statisticsAPI = {
+  getBookings: (startDate: string, endDate: string) =>
+    apiCall(`/statistics/bookings?startDate=${startDate}&endDate=${endDate}`),
+  getFacilities: (startDate?: string, endDate?: string) => {
+    let query = '';
+    if (startDate && endDate) {
+      query = `?startDate=${startDate}&endDate=${endDate}`;
+    }
+    return apiCall(`/statistics/facilities${query}`);
+  },
+  getUsers: (startDate?: string, endDate?: string) => {
+    let query = '';
+    if (startDate && endDate) {
+      query = `?startDate=${startDate}&endDate=${endDate}`;
+    }
+    return apiCall(`/statistics/users${query}`);
+  }
 };
 
 export default {

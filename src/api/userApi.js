@@ -51,28 +51,33 @@ router.get('/:id', async (req, res) => {
 // ✅ CREATE new user
 router.post('/', async (req, res) => {
   try {
-    const { username, email, firstName, lastName, phone, role, studentId, barcode, faculty } = req.body;
+    const { username, email, password, firstName, lastName, phone, role, studentId, barcode, faculty } = req.body;
 
     // Validate required fields
-    if (!username || !email || !firstName || !lastName || !phone) {
+    if (!username || !email || !firstName || !lastName || !phone || !password || !studentId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: 'Missing required fields: username, email, password, firstName, lastName, phone, studentId'
       });
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+    const existingUser = await User.findOne({ $or: [{ username }, { email }, { studentId }] });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'Username or email already exists'
+        message: 'Username, email, or student ID already exists'
       });
     }
+
+    // Simple password hashing (in production, use bcrypt)
+    const crypto = require('crypto');
+    const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
 
     const newUser = new User({
       username,
       email,
+      passwordHash,
       firstName,
       lastName,
       phone,
@@ -86,10 +91,15 @@ router.post('/', async (req, res) => {
     });
 
     const savedUser = await newUser.save();
+    
+    // Don't return password hash
+    const userResponse = savedUser.toObject();
+    delete userResponse.passwordHash;
+    
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: savedUser
+      data: userResponse
     });
   } catch (error) {
     logger.error('Error creating user:', error);
@@ -190,6 +200,75 @@ router.get('/profile/:username', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching user profile',
+      error: error.message
+    });
+  }
+});
+
+// ✅ POST login - Authenticate user
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and password are required'
+      });
+    }
+
+    // Find user by username (studentId) or email
+    const user = await User.findOne({
+      $or: [
+        { username: username },
+        { email: username },
+        { studentId: username }
+      ]
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    // Compare password
+    const crypto = require('crypto');
+    const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+
+    if (user.passwordHash !== passwordHash) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    // Check if banned
+    if (user.isBanned && user.bannedUntil && new Date(user.bannedUntil) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: `Account banned until ${user.bannedUntil}`
+      });
+    }
+
+    // Return user data without password
+    const userResponse = user.toObject();
+    delete userResponse.passwordHash;
+    
+    // Convert MongoDB _id to id for frontend
+    userResponse.id = userResponse._id;
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: userResponse
+    });
+  } catch (error) {
+    logger.error('Error logging in:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error logging in',
       error: error.message
     });
   }

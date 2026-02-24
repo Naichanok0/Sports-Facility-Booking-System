@@ -68,12 +68,27 @@ router.get('/:id', async (req, res) => {
 // ✅ CREATE new reservation
 router.post('/', async (req, res) => {
   try {
-    const { userId, facilityId, sportTypeId, date, startTime, endTime, playerCount, notes } = req.body;
+    const { 
+      userId, 
+      facilityId, 
+      sportTypeId, 
+      date, 
+      startTime, 
+      endTime, 
+      playerCount = 1, 
+      notes = "",
+      bookingCode,
+      players,
+      status = 'confirmed'
+    } = req.body;
 
+    // Validate required fields
     if (!userId || !facilityId || !sportTypeId || !date || !startTime || !endTime) {
+      console.error('Missing fields:', { userId, facilityId, sportTypeId, date, startTime, endTime });
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: 'Missing required fields',
+        received: { userId: !!userId, facilityId: !!facilityId, sportTypeId: !!sportTypeId, date: !!date, startTime: !!startTime, endTime: !!endTime }
       });
     }
 
@@ -83,7 +98,7 @@ router.post('/', async (req, res) => {
     const durationHours = (endHour - startHour) + (endMin - startMin) / 60;
 
     const newReservation = new Reservation({
-      reservationNo: generateReservationNo(),
+      reservationNo: bookingCode || generateReservationNo(),
       userId,
       facilityId,
       sportTypeId,
@@ -91,9 +106,10 @@ router.post('/', async (req, res) => {
       startTime,
       endTime,
       durationHours,
-      playerCount: playerCount || 0,
-      status: 'pending',
-      notes
+      playerCount: playerCount || 1,
+      status: status,
+      notes,
+      players: players || []
     });
 
     const savedReservation = await newReservation.save();
@@ -254,6 +270,130 @@ router.get('/facility/:facilityId/date/:date', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching facility reservations',
+      error: error.message
+    });
+  }
+});
+
+// ✅ GET available time slots for a facility on a specific date
+router.get('/available-slots/:facilityId', async (req, res) => {
+  try {
+    const { facilityId } = req.params;
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'date query parameter is required (YYYY-MM-DD)'
+      });
+    }
+
+    // Get all reservations for this facility on this date
+    const reservations = await Reservation.find({
+      facilityId,
+      date,
+      status: { $in: ['confirmed', 'checked-in', 'completed'] }
+    }).sort({ startTime: 1 });
+
+    // Generate time slots (08:00 to 18:00, 2-hour slots)
+    const timeSlots = [];
+    const hours = [
+      { start: '08:00', end: '10:00' },
+      { start: '10:00', end: '12:00' },
+      { start: '12:00', end: '14:00' },
+      { start: '14:00', end: '16:00' },
+      { start: '16:00', end: '18:00' }
+    ];
+
+    hours.forEach(slot => {
+      // Check if slot has any reservations
+      const reserved = reservations.filter(res =>
+        (res.startTime <= slot.start && res.endTime > slot.start) ||
+        (res.startTime < slot.end && res.endTime >= slot.end) ||
+        (res.startTime >= slot.start && res.endTime <= slot.end)
+      );
+
+      timeSlots.push({
+        start: slot.start,
+        end: slot.end,
+        available: reserved.length === 0,
+        reserved: reserved.length
+      });
+    });
+
+    logger.info(`Available slots retrieved for facility ${facilityId} on ${date}`);
+
+    res.json({
+      success: true,
+      message: 'Available slots retrieved successfully',
+      data: timeSlots
+    });
+  } catch (error) {
+    logger.error('Error fetching available slots:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching available slots',
+      error: error.message
+    });
+  }
+});
+
+// ✅ GET available bookings (that need more players)
+router.get('/available/bookings', async (req, res) => {
+  try {
+    const { status = 'confirmed', date } = req.query;
+
+    let query = { status };
+    
+    // If date provided, filter for future dates
+    if (date) {
+      query.date = { $gte: date };
+    } else {
+      // Default: future bookings only
+      const today = new Date().toISOString().split('T')[0];
+      query.date = { $gte: today };
+    }
+
+    const bookings = await Reservation.find(query)
+      .populate('userId', 'firstName lastName studentId')
+      .populate('facilityId', 'name location')
+      .populate('sportTypeId', 'name minPlayers')
+      .sort({ date: 1, startTime: 1 });
+
+    // Filter bookings that need more players
+    const availableBookings = bookings.map(booking => {
+      const requiredPlayers = booking.sportTypeId?.minPlayers || booking.requiredPlayers || 2;
+      const currentPlayers = booking.confirmedPlayers?.length || 1;
+      return {
+        _id: booking._id,
+        facilityId: booking.facilityId._id,
+        facilityName: booking.facilityName || booking.facilityId.name,
+        sportTypeId: booking.sportTypeId._id,
+        sportTypeName: booking.sportTypeId.name,
+        date: booking.date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        requiredPlayers,
+        currentPlayers,
+        availableSlots: Math.max(0, requiredPlayers - currentPlayers),
+        createdBy: booking.userId.firstName + ' ' + booking.userId.lastName,
+        status: booking.status
+      };
+    }).filter(b => b.availableSlots > 0);
+
+    logger.info(`Available bookings retrieved, count: ${availableBookings.length}`);
+
+    res.json({
+      success: true,
+      message: 'Available bookings retrieved successfully',
+      data: availableBookings,
+      count: availableBookings.length
+    });
+  } catch (error) {
+    logger.error('Error fetching available bookings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching available bookings',
       error: error.message
     });
   }

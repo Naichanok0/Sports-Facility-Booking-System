@@ -12,24 +12,20 @@ const facilitySchema = new mongoose.Schema({
     ref: 'SportType',
     required: true
   },
-  maxCapacity: { 
+  capacity: { 
     type: Number, 
-    required: true 
+    default: 10 
   },
-  pricePerHour: { 
-    type: Number, 
-    default: 0 
+  status: {
+    type: String,
+    enum: ['available', 'maintenance'],
+    default: 'available'
   },
+  description: String,
   isActive: { 
     type: Boolean, 
     default: true 
   },
-  operatingHours: {
-    openTime: String,
-    closeTime: String
-  },
-  imageUrl: String,
-  notes: String,
   createdAt: { 
     type: Date, 
     default: Date.now 

@@ -56,12 +56,14 @@ router.get('/:id', async (req, res) => {
 // ✅ CREATE new facility
 router.post('/', async (req, res) => {
   try {
-    const { name, location, sportTypeId, maxCapacity, pricePerHour, operatingHours, notes } = req.body;
+    const { name, location, sportTypeId, capacity, status, description } = req.body;
 
-    if (!name || !sportTypeId || !maxCapacity || !pricePerHour) {
+    logger.info('Creating facility with data:', { name, location, sportTypeId, capacity, status, description });
+
+    if (!name || !sportTypeId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: 'Missing required fields: name, sportTypeId'
       });
     }
 
@@ -69,10 +71,9 @@ router.post('/', async (req, res) => {
       name,
       location,
       sportTypeId,
-      maxCapacity,
-      pricePerHour,
-      operatingHours,
-      notes,
+      capacity: capacity || 10,
+      status: status || 'available',
+      description,
       isActive: true
     });
 
@@ -97,7 +98,7 @@ router.post('/', async (req, res) => {
 // ✅ UPDATE facility
 router.put('/:id', async (req, res) => {
   try {
-    const { name, location, sportTypeId, maxCapacity, pricePerHour, operatingHours, notes, isActive } = req.body;
+    const { name, location, sportTypeId, capacity, status, description, isActive } = req.body;
 
     const updatedFacility = await Facility.findByIdAndUpdate(
       req.params.id,
@@ -105,10 +106,9 @@ router.put('/:id', async (req, res) => {
         name,
         location,
         sportTypeId,
-        maxCapacity,
-        pricePerHour,
-        operatingHours,
-        notes,
+        capacity,
+        status,
+        description,
         isActive,
         updatedAt: new Date()
       },

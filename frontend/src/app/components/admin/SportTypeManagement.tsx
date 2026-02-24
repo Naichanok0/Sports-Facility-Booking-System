@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -10,128 +10,132 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../ui/dialog";
-import { Plus, Edit, Clock, Users, Calendar } from "lucide-react";
+import { Plus, Edit, Clock, Users, Calendar, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { sportTypeAPI } from "../../../services/api";
 
 interface SportType {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
-  duration: number;
-  minPlayers: number;
-  checkInWindow: number;
-  cancelWindow: number;
-  description: string;
+  duration?: number;
+  minPlayers?: number;
+  description?: string;
+  icon?: string;
 }
 
-const initialSportTypes: SportType[] = [
-  {
-    id: "1",
-    name: "ฟุตบอล",
-    duration: 120,
-    minPlayers: 10,
-    checkInWindow: 15,
-    cancelWindow: 24,
-    description: "กีฬาฟุตบอล ต้องมีผู้เล่นขั้นต่ำ 10 คน",
-  },
-  {
-    id: "2",
-    name: "บาสเกตบอล",
-    duration: 90,
-    minPlayers: 8,
-    checkInWindow: 10,
-    cancelWindow: 12,
-    description: "กีฬาบาสเกตบอล ต้องมีผู้เล่นขั้นต่ำ 8 คน",
-  },
-  {
-    id: "3",
-    name: "แบดมินตัน",
-    duration: 60,
-    minPlayers: 2,
-    checkInWindow: 10,
-    cancelWindow: 6,
-    description: "กีฬาแบดมินตัน เล่นได้ตั้งแต่ 2 คนขึ้นไป",
-  },
-  {
-    id: "4",
-    name: "เทนนิส",
-    duration: 60,
-    minPlayers: 2,
-    checkInWindow: 10,
-    cancelWindow: 6,
-    description: "กีฬาเทนนิส เล่นได้ตั้งแต่ 2 คนขึ้นไป",
-  },
-  {
-    id: "5",
-    name: "วอลเลย์บอล",
-    duration: 90,
-    minPlayers: 6,
-    checkInWindow: 15,
-    cancelWindow: 12,
-    description: "กีฬาวอลเลย์บอล ต้องมีผู้เล่นขั้นต่ำ 6 คน",
-  },
-];
-
 export default function SportTypeManagement() {
-  const [sportTypes, setSportTypes] = useState<SportType[]>(initialSportTypes);
+  const [sportTypes, setSportTypes] = useState<SportType[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSport, setEditingSport] = useState<SportType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    duration: 60,
-    minPlayers: 2,
-    checkInWindow: 10,
-    cancelWindow: 6,
     description: "",
+    duration: 30,
+    minPlayers: 1,
   });
+
+  // Fetch sport types from API
+  useEffect(() => {
+    const fetchSportTypes = async () => {
+      try {
+        setLoading(true);
+        const result = await sportTypeAPI.getAll();
+        if (result.success && Array.isArray(result.data)) {
+          setSportTypes(result.data);
+        }
+      } catch (err: any) {
+        console.error("Error fetching sport types:", err);
+        setError("ไม่สามารถโหลดข้อมูลชนิดกีฬา");
+        toast.error("ไม่สามารถโหลดข้อมูล");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSportTypes();
+  }, []);
 
   const handleOpenDialog = (sport?: SportType) => {
     if (sport) {
       setEditingSport(sport);
       setFormData({
         name: sport.name,
-        duration: sport.duration,
-        minPlayers: sport.minPlayers,
-        checkInWindow: sport.checkInWindow,
-        cancelWindow: sport.cancelWindow,
-        description: sport.description,
+        description: sport.description || "",
+        duration: sport.duration || 30,
+        minPlayers: sport.minPlayers || 1,
       });
     } else {
       setEditingSport(null);
       setFormData({
         name: "",
-        duration: 60,
-        minPlayers: 2,
-        checkInWindow: 10,
-        cancelWindow: 6,
         description: "",
+        duration: 30,
+        minPlayers: 1,
       });
     }
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name) {
       toast.error("กรุณากรอกชื่อชนิดกีฬา");
       return;
     }
 
-    if (editingSport) {
-      setSportTypes(
-        sportTypes.map((s) =>
-          s.id === editingSport.id ? { ...s, ...formData } : s
-        )
-      );
-      toast.success("แก้ไขข้อมูลสำเร็จ");
-    } else {
-      const newSport: SportType = {
-        id: Date.now().toString(),
-        ...formData,
-      };
-      setSportTypes([...sportTypes, newSport]);
-      toast.success("เพิ่มชนิดกีฬาใหม่สำเร็จ");
+    try {
+      if (editingSport) {
+        // Update existing
+        const result = await sportTypeAPI.update(editingSport._id || editingSport.id || "", formData);
+        if (result.success) {
+          setSportTypes(
+            sportTypes.map((s) =>
+              (s._id || s.id) === (editingSport._id || editingSport.id)
+                ? { ...s, ...formData }
+                : s
+            )
+          );
+          toast.success("แก้ไขข้อมูลสำเร็จ");
+        } else {
+          toast.error(result.error || "ไม่สามารถแก้ไขข้อมูล");
+        }
+      } else {
+        // Create new
+        const result = await sportTypeAPI.create(formData);
+        if (result.success) {
+          setSportTypes([...sportTypes, result.data as SportType]);
+          toast.success("เพิ่มชนิดกีฬาใหม่สำเร็จ");
+        } else {
+          toast.error(result.error || "ไม่สามารถเพิ่มชนิดกีฬา");
+        }
+      }
+
+      setIsDialogOpen(false);
+    } catch (err: any) {
+      console.error("Error:", err);
+      toast.error(err.message || "เกิดข้อผิดพลาด");
+    }
+  };
+
+  const handleDelete = async (sportId: string) => {
+    if (!confirm("คุณแน่ใจหรือว่าต้องการลบชนิดกีฬานี้?")) {
+      return;
     }
 
-    setIsDialogOpen(false);
+    try {
+      const result = await sportTypeAPI.delete(sportId);
+      if (result.success) {
+        setSportTypes(sportTypes.filter((s) => (s._id || s.id) !== sportId));
+        toast.success("ลบชนิดกีฬาสำเร็จ");
+      } else {
+        toast.error(result.error || "ไม่สามารถลบชนิดกีฬา");
+      }
+    } catch (err: any) {
+      console.error("Error:", err);
+      toast.error(err.message || "เกิดข้อผิดพลาด");
+    }
   };
 
   return (
@@ -175,7 +179,7 @@ export default function SportTypeManagement() {
                   type="number"
                   value={formData.duration}
                   onChange={(e) =>
-                    setFormData({ ...formData, duration: parseInt(e.target.value) })
+                    setFormData({ ...formData, duration: parseInt(e.target.value) || 30 })
                   }
                   min="30"
                   className="border-teal-200 focus:border-teal-500"
@@ -183,47 +187,13 @@ export default function SportTypeManagement() {
               </div>
 
               <div>
-                <Label htmlFor="minPlayers">จำนวนผู้เล่นขั้นต่ำ</Label>
+                <Label htmlFor="minPlayers">ผู้เล่นขั้นต่ำ</Label>
                 <Input
                   id="minPlayers"
                   type="number"
                   value={formData.minPlayers}
                   onChange={(e) =>
-                    setFormData({ ...formData, minPlayers: parseInt(e.target.value) })
-                  }
-                  min="1"
-                  className="border-teal-200 focus:border-teal-500"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="checkInWindow">เวลาเช็คอินก่อนเริ่ม (นาที)</Label>
-                <Input
-                  id="checkInWindow"
-                  type="number"
-                  value={formData.checkInWindow}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      checkInWindow: parseInt(e.target.value),
-                    })
-                  }
-                  min="5"
-                  className="border-teal-200 focus:border-teal-500"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="cancelWindow">เวลายกเลิกล่วงหน้า (ชั่วโมง)</Label>
-                <Input
-                  id="cancelWindow"
-                  type="number"
-                  value={formData.cancelWindow}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      cancelWindow: parseInt(e.target.value),
-                    })
+                    setFormData({ ...formData, minPlayers: parseInt(e.target.value) || 1 })
                   }
                   min="1"
                   className="border-teal-200 focus:border-teal-500"
@@ -254,19 +224,27 @@ export default function SportTypeManagement() {
         </Dialog>
       </div>
 
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="p-4 border-2 border-teal-50 rounded-lg flex gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+          <span>กำลังโหลด...</span>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {sportTypes.map((sport) => (
-          <Card key={sport.id} className="p-5 hover:shadow-lg transition-shadow border-2 border-teal-50">
-            <div className="flex justify-between items-start mb-4">
+          <Card key={sport._id || sport.id} className="p-5 hover:shadow-lg transition-shadow border-2 border-teal-50">
+            <div className="mb-4">
               <h3 className="text-xl font-bold text-gray-800">{sport.name}</h3>
-              <Button
-                onClick={() => handleOpenDialog(sport)}
-                variant="outline"
-                size="sm"
-                className="border-teal-300 text-teal-700 hover:bg-teal-50"
-              >
-                <Edit className="w-4 h-4" />
-              </Button>
             </div>
 
             <div className="space-y-2 text-sm">
@@ -278,21 +256,35 @@ export default function SportTypeManagement() {
                 <Users className="w-4 h-4 mr-2 text-teal-600" />
                 <span>ผู้เล่นขั้นต่ำ: {sport.minPlayers} คน</span>
               </div>
-              <div className="flex items-center text-gray-700">
-                <Calendar className="w-4 h-4 mr-2 text-teal-600" />
-                <span>เช็คอินก่อน: {sport.checkInWindow} นาที</span>
-              </div>
-              <div className="flex items-center text-gray-700">
-                <Calendar className="w-4 h-4 mr-2 text-teal-600" />
-                <span>ยกเลิกก่อน: {sport.cancelWindow} ชั่วโมง</span>
-              </div>
               <div className="text-gray-700">
                 <span>คำอธิบาย: {sport.description}</span>
               </div>
             </div>
+
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={() => handleOpenDialog(sport)}
+                variant="outline"
+                size="sm"
+                className="flex-1 border-teal-300 text-teal-700 hover:bg-teal-50"
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                แก้ไข
+              </Button>
+              <Button
+                onClick={() => handleDelete(sport._id || sport.id || "")}
+                variant="outline"
+                size="sm"
+                className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                ลบ
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }

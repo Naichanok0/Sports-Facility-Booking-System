@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User } from "../../App";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
@@ -18,19 +18,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import { CalendarIcon, Clock, Users, MapPin, CheckCircle, Share2, Copy, Check } from "lucide-react";
+import { CalendarIcon, Clock, Users, MapPin, CheckCircle, Share2, Copy, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import BookingWaitingRoom from "./BookingWaitingRoom";
+import { facilityAPI, sportTypeAPI, reservationAPI } from "../../../services/api";
 
 interface Facility {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   sportTypeId: string;
-  sportTypeName: string;
+  sportTypeName?: string;
   status: "available" | "maintenance";
-  requiredPlayers: number;
+  requiredPlayers?: number;
+  capacity?: number;
 }
 
 interface TimeSlot {
@@ -39,41 +42,13 @@ interface TimeSlot {
   available: boolean;
 }
 
-const mockFacilities: Facility[] = [
-  {
-    id: "1",
-    name: "สนามฟุตบอล 1",
-    sportTypeId: "1",
-    sportTypeName: "ฟุตบอล",
-    status: "available",
-    requiredPlayers: 10,
-  },
-  {
-    id: "2",
-    name: "สนามบาสเกตบอล A",
-    sportTypeId: "2",
-    sportTypeName: "บาสเกตบอล",
-    status: "available",
-    requiredPlayers: 10,
-  },
-  {
-    id: "3",
-    name: "คอร์ทแบดมินตัน 1",
-    sportTypeId: "3",
-    sportTypeName: "แบดมินตัน",
-    status: "available",
-    requiredPlayers: 4,
-  },
-  {
-    id: "4",
-    name: "คอร์ทแบดมินตัน 2",
-    sportTypeId: "3",
-    sportTypeName: "แบดมินตัน",
-    status: "available",
-    requiredPlayers: 4,
-  },
-];
+interface SportType {
+  _id?: string;
+  id?: string;
+  name: string;
+}
 
+// Generate standard time slots - 2 hour slots from 8 AM to 8 PM
 const generateTimeSlots = (): TimeSlot[] => {
   const slots: TimeSlot[] = [];
   const hours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
@@ -83,7 +58,7 @@ const generateTimeSlots = (): TimeSlot[] => {
       slots.push({
         start: hour,
         end: hours[index + 1],
-        available: Math.random() > 0.3,
+        available: true, // Default to available - will be updated based on reservations
       });
     }
   });
@@ -97,34 +72,103 @@ interface BookingPageProps {
 
 export default function BookingPage({ user }: BookingPageProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedSportType, setSelectedSportType] = useState<string>("");
+  const [selectedSportType, setSelectedSportType] = useState<string>("all");
   const [selectedFacility, setSelectedFacility] = useState<string>("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
-  const [timeSlots] = useState<TimeSlot[]>(generateTimeSlots());
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(generateTimeSlots());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [activeBooking, setActiveBooking] = useState<{
     bookingCode: string;
+    facilityId: string;
     facilityName: string;
+    sportTypeId: string;
     sportTypeName: string;
     date: string;
     timeSlot: string;
     requiredPlayers: number;
   } | null>(null);
+  
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [sportTypes, setSportTypes] = useState<SportType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reservations, setReservations] = useState<any[]>([]);
 
-  const filteredFacilities = selectedSportType
-    ? mockFacilities.filter(
+  // Fetch facilities and sport types
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch sport types
+        const sportTypesRes = await sportTypeAPI.getAll();
+        if (sportTypesRes.success && Array.isArray(sportTypesRes.data)) {
+          setSportTypes(sportTypesRes.data);
+        }
+
+        // Fetch facilities
+        const facilitiesRes = await facilityAPI.getAll();
+        if (facilitiesRes.success && Array.isArray(facilitiesRes.data)) {
+          setFacilities(facilitiesRes.data);
+        }
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        toast.error("ไม่สามารถโหลดข้อมูลสนามได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Check available slots when facility or date changes
+  useEffect(() => {
+    const checkAvailableSlots = async () => {
+      if (!selectedFacility) {
+        setTimeSlots(generateTimeSlots());
+        return;
+      }
+
+      try {
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        const reservationsRes = await reservationAPI.getFacilityReservations(selectedFacility, dateStr);
+        
+        if (reservationsRes.success && Array.isArray(reservationsRes.data)) {
+          setReservations(reservationsRes.data);
+          
+          // Update availability based on existing reservations
+          const updatedSlots = generateTimeSlots().map(slot => {
+            const hasReservation = (reservationsRes.data as any[]).some((res: any) => {
+              return res.startTime === slot.start && res.status !== "cancelled";
+            });
+            return {
+              ...slot,
+              available: !hasReservation,
+            };
+          });
+          
+          setTimeSlots(updatedSlots);
+        } else {
+          setTimeSlots(generateTimeSlots());
+        }
+      } catch (err: any) {
+        console.error("Error checking available slots:", err);
+        // Default to all slots available if error
+        setTimeSlots(generateTimeSlots());
+      }
+    };
+
+    checkAvailableSlots();
+  }, [selectedFacility, selectedDate]);
+
+  const filteredFacilities = selectedSportType && selectedSportType !== "all"
+    ? facilities.filter(
         (f) => f.sportTypeId === selectedSportType && f.status === "available"
       )
-    : mockFacilities.filter((f) => f.status === "available");
+    : facilities.filter((f) => f.status === "available");
 
-  const sportTypes = [
-    { id: "1", name: "ฟุตบอล" },
-    { id: "2", name: "บาสเกตบอล" },
-    { id: "3", name: "แบดมินตัน" },
-  ];
-
-  const selectedFacilityData = mockFacilities.find(
-    (f) => f.id === selectedFacility
+  const selectedFacilityData = facilities.find(
+    (f) => (f._id || f.id) === selectedFacility
   );
 
   const handleBooking = () => {
@@ -136,16 +180,25 @@ export default function BookingPage({ user }: BookingPageProps) {
   };
 
   const confirmBooking = () => {
+    if (!selectedFacilityData) return;
+    
     // Generate booking code
     const bookingCode = `BK${Date.now().toString().slice(-6)}`;
     
+    // Find sport type name
+    const sportType = sportTypes.find(
+      (s) => (s._id || s.id) === selectedFacilityData.sportTypeId
+    );
+    
     setActiveBooking({
       bookingCode,
-      facilityName: selectedFacilityData!.name,
-      sportTypeName: selectedFacilityData!.sportTypeName,
+      facilityId: selectedFacilityData._id || selectedFacilityData.id || "",
+      facilityName: selectedFacilityData.name,
+      sportTypeId: selectedFacilityData.sportTypeId || "",
+      sportTypeName: sportType?.name || "ไม่ระบุ",
       date: format(selectedDate, "d MMMM yyyy", { locale: th }),
       timeSlot: `${selectedTimeSlot!.start} - ${selectedTimeSlot!.end}`,
-      requiredPlayers: selectedFacilityData!.requiredPlayers,
+      requiredPlayers: selectedFacilityData.capacity || 0,
     });
 
     setShowConfirmDialog(false);
@@ -171,7 +224,9 @@ export default function BookingPage({ user }: BookingPageProps) {
     return (
       <BookingWaitingRoom
         bookingCode={activeBooking.bookingCode}
+        facilityId={activeBooking.facilityId}
         facilityName={activeBooking.facilityName}
+        sportTypeId={activeBooking.sportTypeId}
         sportTypeName={activeBooking.sportTypeName}
         date={activeBooking.date}
         timeSlot={activeBooking.timeSlot}
@@ -220,7 +275,7 @@ export default function BookingPage({ user }: BookingPageProps) {
               <SelectContent>
                 <SelectItem value="all">ทุกชนิดกีฬา</SelectItem>
                 {sportTypes.map((sport) => (
-                  <SelectItem key={sport.id} value={sport.id}>
+                  <SelectItem key={sport._id || sport.id} value={sport._id || sport.id || ""}>
                     {sport.name}
                   </SelectItem>
                 ))}
@@ -231,6 +286,15 @@ export default function BookingPage({ user }: BookingPageProps) {
 
         {/* Available Facilities and Time Slots */}
         <div className="lg:col-span-2 space-y-4">
+          {loading ? (
+            <Card className="p-5 border-2 border-teal-50">
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>กำลังโหลดข้อมูล...</span>
+              </div>
+            </Card>
+          ) : (
+            <>
           <Card className="p-5 border-2 border-teal-50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-800">เลือกสนาม</h3>
@@ -242,10 +306,10 @@ export default function BookingPage({ user }: BookingPageProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               {filteredFacilities.map((facility) => (
                 <button
-                  key={facility.id}
-                  onClick={() => setSelectedFacility(facility.id)}
+                  key={facility._id || facility.id}
+                  onClick={() => setSelectedFacility(facility._id || facility.id || "")}
                   className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedFacility === facility.id
+                    selectedFacility === (facility._id || facility.id)
                       ? "border-teal-500 bg-gradient-to-br from-teal-50 to-blue-50 shadow-md"
                       : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/30"
                   }`}
@@ -338,6 +402,8 @@ export default function BookingPage({ user }: BookingPageProps) {
               </div>
             )}
           </Card>
+            </>
+          )}
         </div>
       </div>
 

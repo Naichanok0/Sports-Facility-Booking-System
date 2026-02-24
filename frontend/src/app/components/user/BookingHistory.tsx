@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User } from "../../App";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
@@ -24,10 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Calendar, Clock, X, CheckCircle, QrCode } from "lucide-react";
+import { Calendar, Clock, X, CheckCircle, QrCode, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
+import { reservationAPI, facilityAPI, checkinAPI } from "../../../services/api";
 
 interface Booking {
   id: string;
@@ -42,65 +43,31 @@ interface Booking {
   canCheckIn: boolean;
 }
 
-const mockBookings: Booking[] = [
-  {
-    id: "1",
-    facilityName: "สนามฟุตบอล 1",
-    sportType: "ฟุตบอล",
-    date: "2026-02-20",
-    startTime: "14:00",
-    endTime: "16:00",
-    status: "confirmed",
-    canCancel: true,
-    canCheckIn: false,
-  },
-  {
-    id: "2",
-    facilityName: "คอร์ทแบดมินตัน 1",
-    sportType: "แบดมินตัน",
-    date: "2026-02-19",
-    startTime: "10:00",
-    endTime: "11:00",
-    status: "checked-in",
-    checkInTime: "09:55",
-    canCancel: false,
-    canCheckIn: false,
-  },
-  {
-    id: "3",
-    facilityName: "สนามบาสเกตบอล A",
-    sportType: "บาสเกตบอล",
-    date: "2026-02-18",
-    startTime: "16:00",
-    endTime: "17:30",
-    status: "completed",
-    checkInTime: "15:50",
-    canCancel: false,
-    canCheckIn: false,
-  },
-  {
-    id: "4",
-    facilityName: "สนามฟุตบอล 1",
-    sportType: "ฟุตบอล",
-    date: "2026-02-17",
-    startTime: "14:00",
-    endTime: "16:00",
-    status: "no-show",
-    canCancel: false,
-    canCheckIn: false,
-  },
-  {
-    id: "5",
-    facilityName: "คอร์ทแบดมินตัน 2",
-    sportType: "แบดมินตัน",
-    date: "2026-02-16",
-    startTime: "18:00",
-    endTime: "19:00",
-    status: "cancelled",
-    canCancel: false,
-    canCheckIn: false,
-  },
-];
+/**
+ * Maps MongoDB Reservation document to Booking interface
+ * and enriches with facility information
+ */
+async function mapReservationToBooking(
+  reservation: any,
+  facilities: any[]
+): Promise<Booking> {
+  const facility = facilities.find((f) => f._id === reservation.facilityId);
+
+  return {
+    id: reservation._id,
+    facilityName: facility?.name || "Unknown Facility",
+    sportType: reservation.sportType || "Unknown Sport",
+    date: reservation.date,
+    startTime: reservation.startTime,
+    endTime: reservation.endTime,
+    status: reservation.status || "confirmed",
+    checkInTime: reservation.checkInTime,
+    canCancel: reservation.status === "confirmed",
+    canCheckIn:
+      reservation.status === "confirmed" &&
+      new Date(reservation.date) <= new Date(),
+  };
+}
 
 const statusConfig = {
   confirmed: { label: "จองแล้ว", color: "bg-blue-500" },
@@ -115,46 +82,124 @@ interface BookingHistoryProps {
 }
 
 export default function BookingHistory({ user }: BookingHistoryProps) {
-  const [bookings, setBookings] = useState<Booking[]>(mockBookings);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [facilities, setFacilities] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showCheckInDialog, setShowCheckInDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch user reservations and facilities on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch facilities for mapping
+        const facilitiesRes = await facilityAPI.getAll();
+        if (facilitiesRes.success && Array.isArray(facilitiesRes.data)) {
+          setFacilities(facilitiesRes.data);
+        }
+
+        // Fetch user reservations
+        const reservationsRes = await reservationAPI.getUserReservations(
+          user.id
+        );
+        if (!reservationsRes.success) {
+          throw new Error(
+            reservationsRes.error || "Failed to fetch reservations"
+          );
+        }
+
+        // Map reservations to booking interface
+        const bookingData = await Promise.all(
+          (Array.isArray(reservationsRes.data) ? reservationsRes.data : []).map((reservation: any) =>
+            mapReservationToBooking(reservation, Array.isArray(facilitiesRes.data) ? facilitiesRes.data : [])
+          )
+        );
+
+        setBookings(bookingData);
+      } catch (err: any) {
+        console.error("Error fetching bookings:", err);
+        setError(err.message || "Failed to load bookings");
+        toast.error("ไม่สามารถโหลดประวัติการจองได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.id) {
+      fetchData();
+    }
+  }, [user.id]);
 
   const filteredBookings = bookings.filter((booking) => {
     if (statusFilter === "all") return true;
     return booking.status === statusFilter;
   });
 
-  const handleCancelBooking = () => {
+  const handleCancelBooking = async () => {
     if (!selectedBooking) return;
 
-    setBookings(
-      bookings.map((b) =>
-        b.id === selectedBooking.id ? { ...b, status: "cancelled", canCancel: false } : b
-      )
-    );
-    toast.success("ยกเลิกการจองสำเร็จ");
-    setShowCancelDialog(false);
-    setSelectedBooking(null);
+    try {
+      const result = await reservationAPI.cancel(selectedBooking.id, "User cancelled");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to cancel booking");
+      }
+
+      // Update local state
+      setBookings(
+        bookings.map((b) =>
+          b.id === selectedBooking.id
+            ? { ...b, status: "cancelled", canCancel: false }
+            : b
+        )
+      );
+
+      toast.success("ยกเลิกการจองสำเร็จ");
+      setShowCancelDialog(false);
+      setSelectedBooking(null);
+    } catch (err: any) {
+      console.error("Error cancelling booking:", err);
+      toast.error(err.message || "ไม่สามารถยกเลิกการจองได้");
+    }
   };
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (!selectedBooking) return;
 
-    const now = new Date();
-    const checkInTime = format(now, "HH:mm");
+    try {
+      const now = new Date();
+      const checkInTime = format(now, "HH:mm");
 
-    setBookings(
-      bookings.map((b) =>
-        b.id === selectedBooking.id
-          ? { ...b, status: "checked-in", checkInTime, canCheckIn: false }
-          : b
-      )
-    );
-    toast.success("เช็คอินสำเร็จ! ขอให้สนุกกับการออกกำลังกาย");
-    setShowCheckInDialog(false);
-    setSelectedBooking(null);
+      const result = await checkinAPI.checkin({
+        reservationId: selectedBooking.id,
+        checkInTime,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to check in");
+      }
+
+      // Update local state
+      setBookings(
+        bookings.map((b) =>
+          b.id === selectedBooking.id
+            ? { ...b, status: "checked-in", checkInTime, canCheckIn: false }
+            : b
+        )
+      );
+
+      toast.success("เช็คอินสำเร็จ! ขอให้สนุกกับการออกกำลังกาย");
+      setShowCheckInDialog(false);
+      setSelectedBooking(null);
+    } catch (err: any) {
+      console.error("Error checking in:", err);
+      toast.error(err.message || "ไม่สามารถเช็คอินได้");
+    }
   };
 
   return (
@@ -176,89 +221,118 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
         </Select>
       </div>
 
-      <Card className="p-4 border-2 border-teal-50">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
-                <TableHead>วันที่</TableHead>
-                <TableHead>เวลา</TableHead>
-                <TableHead>สนาม</TableHead>
-                <TableHead>ชนิดกีฬา</TableHead>
-                <TableHead>สถานะ</TableHead>
-                <TableHead>การกระทำ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBookings.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
-                    ไม่พบประวัติการจอง
-                  </TableCell>
+      {/* Error Alert */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Table */}
+      {!loading && (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
+                  <TableHead>วันที่</TableHead>
+                  <TableHead>เวลา</TableHead>
+                  <TableHead>สนาม</TableHead>
+                  <TableHead>ชนิดกีฬา</TableHead>
+                  <TableHead>สถานะ</TableHead>
+                  <TableHead>การกระทำ</TableHead>
                 </TableRow>
-              ) : (
-                filteredBookings.map((booking) => (
-                  <TableRow key={booking.id} className="hover:bg-teal-50/50">
-                    <TableCell>
-                      {format(new Date(booking.date), "d MMM yyyy", {
-                        locale: th,
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {booking.startTime} - {booking.endTime}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {booking.facilityName}
-                    </TableCell>
-                    <TableCell>{booking.sportType}</TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`${statusConfig[booking.status].color} hover:${statusConfig[booking.status].color}`}
-                      >
-                        {statusConfig[booking.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {booking.canCheckIn && (
-                          <Button
-                            onClick={() => {
-                              setSelectedBooking(booking);
-                              setShowCheckInDialog(true);
-                            }}
-                            size="sm"
-                            className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
-                          >
-                            <QrCode className="w-4 h-4 mr-1" />
-                            เช็คอิน
-                          </Button>
-                        )}
-                        {booking.canCancel && (
-                          <Button
-                            onClick={() => {
-                              setSelectedBooking(booking);
-                              setShowCancelDialog(true);
-                            }}
-                            size="sm"
-                            variant="outline"
-                            className="border-red-300 text-red-600 hover:bg-red-50"
-                          >
-                            <X className="w-4 h-4 mr-1" />
-                            ยกเลิก
-                          </Button>
-                        )}
-                        {!booking.canCancel && !booking.canCheckIn && (
-                          <span className="text-sm text-gray-400">-</span>
-                        )}
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {filteredBookings.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-gray-500">
+                      ไม่พบประวัติการจอง
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+                ) : (
+                  filteredBookings.map((booking) => (
+                    <TableRow key={booking.id} className="hover:bg-teal-50/50">
+                      <TableCell>
+                        {format(new Date(booking.date), "d MMM yyyy", {
+                          locale: th,
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {booking.startTime} - {booking.endTime}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {booking.facilityName}
+                      </TableCell>
+                      <TableCell>{booking.sportType}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`${statusConfig[booking.status].color} hover:${statusConfig[booking.status].color}`}
+                        >
+                          {statusConfig[booking.status].label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {booking.canCheckIn && (
+                            <Button
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowCheckInDialog(true);
+                              }}
+                              size="sm"
+                              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                            >
+                              <QrCode className="w-4 h-4 mr-1" />
+                              เช็คอิน
+                            </Button>
+                          )}
+                          {booking.canCancel && (
+                            <Button
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowCancelDialog(true);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50"
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              ยกเลิก
+                            </Button>
+                          )}
+                          {!booking.canCancel && !booking.canCheckIn && (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>

@@ -10,10 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { UserPlus, ArrowLeft, Mail, Phone, CreditCard, User, KeyRound } from "lucide-react";
+import { UserPlus, ArrowLeft, Mail, Phone, CreditCard, User, KeyRound, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { User as UserType } from "../App";
-import { registeredUsers } from "./LoginPage";
+import { userAPI } from "../../services/api";
 
 interface RegisterPageProps {
   onBack: () => void;
@@ -44,12 +44,16 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
     confirmPassword: "",
     faculty: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    setError(null);
+    
     // Validation
     if (
       !formData.firstName ||
@@ -90,37 +94,37 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
       return;
     }
 
-    // Check if student ID already exists
-    if (registeredUsers.find((u) => u.studentId === formData.studentId)) {
-      toast.error("รหัสนิสิตนี้ถูกใช้งานแล้ว");
-      return;
+    try {
+      setLoading(true);
+
+      // Create new user via API
+      const result = await userAPI.create({
+        username: formData.studentId, // Backend expects 'username'
+        studentId: formData.studentId,
+        barcode: formData.barcode,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        faculty: formData.faculty,
+        role: "user", // Always user role for registration
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to register");
+      }
+
+      toast.success("สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ");
+      onBack();
+    } catch (err: any) {
+      console.error("Register error:", err);
+      const errorMsg = err.message || "Failed to register user";
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
     }
-
-    // Check if barcode already exists
-    if (registeredUsers.find((u) => u.barcode === formData.barcode)) {
-      toast.error("เลขบาร์โค้ดนี้ถูกใช้งานแล้ว");
-      return;
-    }
-
-    // Create new user
-    const newUser: UserType = {
-      id: Date.now().toString(),
-      studentId: formData.studentId,
-      barcode: formData.barcode,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      phone: formData.phone,
-      faculty: formData.faculty,
-      role: "user",
-      isBanned: false,
-      noShowCount: 0,
-      password: formData.password,
-    };
-
-    registeredUsers.push(newUser);
-    toast.success("สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ");
-    onBack();
   };
 
   return (
@@ -283,11 +287,22 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
             </div>
           </div>
 
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <Button
               onClick={onBack}
               variant="outline"
               className="flex-1 border-gray-300"
+              disabled={loading}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               กลับ
@@ -295,10 +310,20 @@ export default function RegisterPage({ onBack }: RegisterPageProps) {
 
             <Button
               onClick={handleRegister}
-              className="flex-1 bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white"
+              disabled={loading}
+              className="flex-1 bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white disabled:opacity-50"
             >
-              <UserPlus className="w-4 h-4 mr-2" />
-              สมัครสมาชิก
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  กำลังสมัครสมาชิก...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  สมัครสมาชิก
+                </>
+              )}
             </Button>
           </div>
         </div>

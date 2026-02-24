@@ -164,4 +164,15 @@ router.delete('/reservations/:reservationId', authRequired, async (req, res) => 
   }
 });
 
+// ========== Statistics Routes ==========
+const { 
+  getBookingStatistics, 
+  getFacilityStatistics, 
+  getUserStatistics 
+} = require('./api/statisticsApi');
+
+router.get('/statistics/bookings', getBookingStatistics);
+router.get('/statistics/facilities', getFacilityStatistics);
+router.get('/statistics/users', getUserStatistics);
+
 module.exports = router;

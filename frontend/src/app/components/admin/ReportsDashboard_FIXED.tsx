@@ -57,19 +57,17 @@ export default function ReportsDashboard() {
         ]);
 
         if (bookingResponse.success && bookingResponse.data) {
-          const bookingData = (bookingResponse.data as any[]) || [];
-          setBookingStats(bookingData);
+          setBookingStats(bookingResponse.data || []);
           setSummaryStats({
-            totalBookings: bookingData.length || 0,
-            completedBookings: bookingData.filter((b: any) => b.status === "completed").length || 0,
-            noShowCount: bookingData.filter((b: any) => b.status === "no-show").length || 0,
-            totalPlayers: bookingData.reduce((sum: number, b: any) => sum + (b.playerCount || 0), 0),
+            totalBookings: bookingResponse.data.length || 0,
+            completedBookings: bookingResponse.data.filter((b: any) => b.status === "completed").length || 0,
+            noShowCount: bookingResponse.data.filter((b: any) => b.status === "no-show").length || 0,
+            totalPlayers: bookingResponse.data.reduce((sum: number, b: any) => sum + (b.playerCount || 0), 0),
           });
         }
 
         if (facilityResponse.success && facilityResponse.data) {
-          const facilityData = (facilityResponse.data as any[]) || [];
-          setFacilityStats(facilityData);
+          setFacilityStats(facilityResponse.data || []);
         }
       } catch (error: any) {
         console.error("Error fetching statistics:", error);

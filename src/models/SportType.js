@@ -8,6 +8,16 @@ const sportTypeSchema = new mongoose.Schema({
   },
   description: String,
   icon: String,
+  duration: {
+    type: Number,
+    default: 60,
+    description: 'Duration in minutes'
+  },
+  minPlayers: {
+    type: Number,
+    default: 2,
+    description: 'Minimum number of players required'
+  },
   isActive: { 
     type: Boolean, 
     default: true 

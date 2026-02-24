@@ -51,7 +51,7 @@ router.get('/:id', async (req, res) => {
 // ✅ CREATE new sport type
 router.post('/', async (req, res) => {
   try {
-    const { name, description, icon } = req.body;
+    const { name, description, icon, duration, minPlayers } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -73,6 +73,8 @@ router.post('/', async (req, res) => {
       name,
       description,
       icon,
+      duration: duration || 60,
+      minPlayers: minPlayers || 2,
       isActive: true
     });
 
@@ -95,7 +97,7 @@ router.post('/', async (req, res) => {
 // ✅ UPDATE sport type
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, icon, isActive } = req.body;
+    const { name, description, icon, duration, minPlayers, isActive } = req.body;
 
     const updatedSportType = await SportType.findByIdAndUpdate(
       req.params.id,
@@ -103,6 +105,8 @@ router.put('/:id', async (req, res) => {
         name,
         description,
         icon,
+        duration,
+        minPlayers,
         isActive
       },
       { new: true }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import {
@@ -9,9 +9,11 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Calendar, Clock } from "lucide-react";
+import { Calendar, Clock, Loader2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
+import { reservationAPI } from "../../../services/api";
+import { toast } from "sonner";
 
 interface Booking {
   id: string;
@@ -24,65 +26,6 @@ interface Booking {
   checkInTime?: string;
 }
 
-const mockTodayBookings: Booking[] = [
-  {
-    id: "1",
-    facilityName: "สนามฟุตบอล 1",
-    userName: "สมหญิง รักเรียน",
-    userBarcode: "6698765432",
-    startTime: "08:00",
-    endTime: "10:00",
-    status: "completed",
-    checkInTime: "07:55",
-  },
-  {
-    id: "2",
-    facilityName: "คอร์ทแบดมินตัน 1",
-    userName: "ประเสริฐ กีฬาดี",
-    userBarcode: "6611112222",
-    startTime: "10:00",
-    endTime: "11:00",
-    status: "completed",
-    checkInTime: "09:58",
-  },
-  {
-    id: "3",
-    facilityName: "สนามบาสเกตบอล A",
-    userName: "สมชัย ใจดี",
-    userBarcode: "6612345678",
-    startTime: "12:00",
-    endTime: "13:30",
-    status: "no-show",
-  },
-  {
-    id: "4",
-    facilityName: "สนามฟุตบอล 1",
-    userName: "สมหญิง รักเรียน",
-    userBarcode: "6698765432",
-    startTime: "14:00",
-    endTime: "16:00",
-    status: "confirmed",
-  },
-  {
-    id: "5",
-    facilityName: "สนามบาสเกตบอล A",
-    userName: "ประเสริฐ กีฬาดี",
-    userBarcode: "6611112222",
-    startTime: "16:00",
-    endTime: "17:30",
-    status: "confirmed",
-  },
-  {
-    id: "6",
-    facilityName: "คอร์ทแบดมินตัน 2",
-    userName: "สมศักดิ์ ดูแลดี",
-    userBarcode: "6655554444",
-    startTime: "18:00",
-    endTime: "19:00",
-    status: "confirmed",
-  },
-];
-
 const statusConfig = {
   confirmed: { label: "รอเช็คอิน", color: "bg-blue-500" },
   "checked-in": { label: "เช็คอินแล้ว", color: "bg-green-500" },
@@ -91,7 +34,49 @@ const statusConfig = {
 };
 
 export default function TodayBookings() {
-  const [bookings] = useState<Booking[]>(mockTodayBookings);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch today's bookings
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await reservationAPI.getAll();
+        if (!response.success || !Array.isArray(response.data)) {
+          throw new Error(response.error || "Failed to fetch bookings");
+        }
+
+        // Filter for today's bookings
+        const today = new Date().toISOString().split('T')[0];
+        const todayBookings: Booking[] = (response.data || [])
+          .filter((res: any) => res.date === today)
+          .map((res: any) => ({
+            id: res._id,
+            facilityName: res.facilityName || "Unknown Facility",
+            userName: res.userName || "Unknown User",
+            userBarcode: res.userBarcode || "-",
+            startTime: res.startTime || "-",
+            endTime: res.endTime || "-",
+            status: res.status || "confirmed",
+            checkInTime: res.checkInTime,
+          }));
+
+        setBookings(todayBookings);
+      } catch (err: any) {
+        console.error("Error fetching bookings:", err);
+        setError(err.message || "Failed to load bookings");
+        toast.error("ไม่สามารถโหลดข้อมูลการจองได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []);
 
   const today = new Date();
   const stats = {
@@ -112,43 +97,61 @@ export default function TodayBookings() {
         </Badge>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
-          <p className="text-sm text-gray-600">ทั้งหมด</p>
-          <p className="text-3xl font-bold text-gray-800 mt-1">
-            {stats.total}
-          </p>
+      {error && (
+        <Card className="p-4 bg-red-50 border-2 border-red-200">
+          <div className="flex items-center gap-2 text-red-600">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
         </Card>
+      )}
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
-          <p className="text-sm text-gray-600">รอเช็คอิน</p>
-          <p className="text-3xl font-bold text-blue-600 mt-1">
-            {stats.confirmed}
-          </p>
+      {loading ? (
+        <Card className="p-8 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+            <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
+          </div>
         </Card>
+      ) : (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
+              <p className="text-sm text-gray-600">ทั้งหมด</p>
+              <p className="text-3xl font-bold text-gray-800 mt-1">
+                {stats.total}
+              </p>
+            </Card>
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
-          <p className="text-sm text-gray-600">เช็คอินแล้ว</p>
-          <p className="text-3xl font-bold text-green-600 mt-1">
-            {stats.checkedIn}
-          </p>
-        </Card>
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
+              <p className="text-sm text-gray-600">รอเช็คอิน</p>
+              <p className="text-3xl font-bold text-blue-600 mt-1">
+                {stats.confirmed}
+              </p>
+            </Card>
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-gray-50 to-white">
-          <p className="text-sm text-gray-600">เสร็จสิ้น</p>
-          <p className="text-3xl font-bold text-gray-600 mt-1">
-            {stats.completed}
-          </p>
-        </Card>
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
+              <p className="text-sm text-gray-600">เช็คอินแล้ว</p>
+              <p className="text-3xl font-bold text-green-600 mt-1">
+                {stats.checkedIn}
+              </p>
+            </Card>
 
-        <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-red-50 to-white">
-          <p className="text-sm text-gray-600">ไม่มา</p>
-          <p className="text-3xl font-bold text-red-600 mt-1">
-            {stats.noShow}
-          </p>
-        </Card>
-      </div>
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-gray-50 to-white">
+              <p className="text-sm text-gray-600">เสร็จสิ้น</p>
+              <p className="text-3xl font-bold text-gray-600 mt-1">
+                {stats.completed}
+              </p>
+            </Card>
+
+            <Card className="p-4 border-2 border-teal-50 bg-gradient-to-br from-red-50 to-white">
+              <p className="text-sm text-gray-600">ไม่มา</p>
+              <p className="text-3xl font-bold text-red-600 mt-1">
+                {stats.noShow}
+              </p>
+            </Card>
+          </div>
 
       {/* Bookings Table */}
       <Card className="p-4 border-2 border-teal-50">
@@ -242,6 +245,8 @@ export default function TodayBookings() {
           ))}
         </div>
       </Card>
+        </>
+      )}
     </div>
   );
 }

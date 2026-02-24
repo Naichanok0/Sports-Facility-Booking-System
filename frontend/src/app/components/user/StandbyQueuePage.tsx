@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -27,11 +27,13 @@ import {
   CheckCircle2,
   UserPlus,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { User } from "../../App";
+import { facilityAPI, queueAPI, sportTypeAPI, reservationAPI } from "../../../services/api";
 
 interface StandbyQueue {
   id: string;
@@ -51,7 +53,7 @@ interface StandbyQueue {
 }
 
 interface Facility {
-  id: string;
+  _id: string;
   name: string;
   sportTypeId: string;
   sportTypeName: string;
@@ -65,29 +67,10 @@ interface TimeSlot {
   hasStandbySlots: boolean;
 }
 
-const mockFacilities: Facility[] = [
-  {
-    id: "1",
-    name: "สนามฟุตบอล 1",
-    sportTypeId: "1",
-    sportTypeName: "ฟุตบอล",
-    requiredPlayers: 10,
-  },
-  {
-    id: "2",
-    name: "สนามบาสเกตบอล A",
-    sportTypeId: "2",
-    sportTypeName: "บาสเกตบอล",
-    requiredPlayers: 10,
-  },
-  {
-    id: "3",
-    name: "คอร์ทแบดมินตัน 1",
-    sportTypeId: "3",
-    sportTypeName: "แบดมินตัน",
-    requiredPlayers: 4,
-  },
-];
+interface SportType {
+  _id: string;
+  name: string;
+}
 
 const generateTimeSlots = (): TimeSlot[] => {
   const hours = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
@@ -99,7 +82,7 @@ const generateTimeSlots = (): TimeSlot[] => {
         start: hour,
         end: hours[index + 1],
         available: false, // Main slot is full
-        hasStandbySlots: Math.random() > 0.5,
+        hasStandbySlots: false, // Will be set based on actual reservations
       });
     }
   });
@@ -117,41 +100,110 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
   const [selectedFacility, setSelectedFacility] = useState<string>("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
   const [availableQueue, setAvailableQueue] = useState<1 | 2 | 3 | null>(null);
-  const [timeSlots] = useState<TimeSlot[]>(generateTimeSlots());
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(generateTimeSlots());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [myStandbyQueues] = useState<StandbyQueue[]>([
-    {
-      id: "sq1",
-      queueNumber: 2,
-      facilityName: "สนามฟุตบอล 1",
-      sportTypeName: "ฟุตบอล",
-      date: "25 กุมภาพันธ์ 2026",
-      timeSlot: "14:00 - 16:00",
-      requiredPlayers: 10,
-      players: [
-        {
-          id: "1",
-          firstName: user.firstName,
-          lastName: user.lastName,
-          studentId: user.studentId,
-        },
-      ],
-      status: "waiting",
-    },
-  ]);
+  
+  // API State
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [sportTypes, setSportTypes] = useState<SportType[]>([]);
+  const [myStandbyQueues, setMyStandbyQueues] = useState<StandbyQueue[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch data from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch facilities and sport types
+        const [facilitiesRes, sportTypesRes, queuesRes] = await Promise.all([
+          facilityAPI.getAll(),
+          sportTypeAPI.getAll(),
+          queueAPI.getAll(),
+        ]);
+
+        if (facilitiesRes.success && facilitiesRes.data) {
+          const facilitiesData = (facilitiesRes.data as any[]).map((f: any) => ({
+            _id: f._id,
+            name: f.name,
+            sportTypeId: f.sportTypeId,
+            sportTypeName: f.sportTypeName,
+            requiredPlayers: f.requiredPlayers || 10,
+          }));
+          setFacilities(facilitiesData);
+        }
+
+        if (sportTypesRes.success && sportTypesRes.data) {
+          setSportTypes((sportTypesRes.data as any[]) || []);
+        }
+
+        if (queuesRes.success && queuesRes.data) {
+          const queuesData = (queuesRes.data as any[]).map((q: any) => ({
+            id: q._id,
+            queueNumber: q.queueNumber,
+            facilityName: q.facilityName,
+            sportTypeName: q.sportTypeName,
+            date: format(new Date(q.date), "d MMMM yyyy", { locale: th }),
+            timeSlot: `${q.startTime} - ${q.endTime}`,
+            requiredPlayers: q.requiredPlayers,
+            players: q.players || [],
+            status: q.status,
+          }));
+          setMyStandbyQueues(queuesData);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast.error("ไม่สามารถโหลดข้อมูลได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Check which slots are full - for standby queue availability
+  useEffect(() => {
+    const checkFullSlots = async () => {
+      if (!selectedFacility) {
+        setTimeSlots(generateTimeSlots());
+        return;
+      }
+
+      try {
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        const reservationsRes = await reservationAPI.getFacilityReservations(selectedFacility, dateStr);
+        
+        if (reservationsRes.success && Array.isArray(reservationsRes.data)) {
+          // Update time slots based on which ones have reservations (full slots)
+          const updatedSlots = generateTimeSlots().map(slot => {
+            const hasReservation = (reservationsRes.data as any[]).some((res: any) => {
+              return res.startTime === slot.start && res.status !== "cancelled";
+            });
+            return {
+              ...slot,
+              available: false, // Standby page shows full slots
+              hasStandbySlots: hasReservation, // If reservation exists, standby is available
+            };
+          });
+          
+          setTimeSlots(updatedSlots);
+        }
+      } catch (err: any) {
+        console.error("Error checking full slots:", err);
+        setTimeSlots(generateTimeSlots());
+      }
+    };
+
+    checkFullSlots();
+  }, [selectedFacility, selectedDate]);
 
   const filteredFacilities = selectedSportType
-    ? mockFacilities.filter((f) => f.sportTypeId === selectedSportType)
-    : mockFacilities;
+    ? facilities.filter((f: any) => f.sportTypeId === selectedSportType)
+    : facilities;
 
-  const sportTypes = [
-    { id: "1", name: "ฟุตบอล" },
-    { id: "2", name: "บาสเกตบอล" },
-    { id: "3", name: "แบดมินตัน" },
-  ];
-
-  const selectedFacilityData = mockFacilities.find(
-    (f) => f.id === selectedFacility
+  const selectedFacilityData = facilities.find(
+    (f: any) => f._id === selectedFacility
   );
 
   const handleTimeSlotSelect = (slot: TimeSlot) => {
@@ -288,8 +340,8 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">ทุกชนิดกีฬา</SelectItem>
-                {sportTypes.map((sport) => (
-                  <SelectItem key={sport.id} value={sport.id}>
+                {sportTypes.map((sport: any) => (
+                  <SelectItem key={sport._id} value={sport._id}>
                     {sport.name}
                   </SelectItem>
                 ))}
@@ -309,12 +361,12 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-              {filteredFacilities.map((facility) => (
+              {filteredFacilities.map((facility: any) => (
                 <button
-                  key={facility.id}
-                  onClick={() => setSelectedFacility(facility.id)}
+                  key={facility._id}
+                  onClick={() => setSelectedFacility(facility._id)}
                   className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedFacility === facility.id
+                    selectedFacility === facility._id
                       ? "border-teal-500 bg-gradient-to-br from-teal-50 to-blue-50 shadow-md"
                       : "border-gray-200 hover:border-teal-300 hover:bg-teal-50/30"
                   }`}
@@ -330,7 +382,7 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
                         ต้องการ {facility.requiredPlayers} คน
                       </p>
                     </div>
-                    {selectedFacility === facility.id && (
+                    {selectedFacility === facility._id && (
                       <CheckCircle2 className="w-5 h-5 text-teal-500" />
                     )}
                   </div>

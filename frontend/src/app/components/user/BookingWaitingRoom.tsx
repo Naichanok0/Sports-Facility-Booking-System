@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { User } from "../../App";
+import { reservationAPI } from "../../../services/api";
 
 interface Player {
   id: string;
@@ -34,7 +35,9 @@ interface Player {
 interface BookingWaitingRoomProps {
   bookingCode: string;
   facilityName: string;
+  facilityId: string;
   sportTypeName: string;
+  sportTypeId: string;
   date: string;
   timeSlot: string;
   requiredPlayers: number;
@@ -46,7 +49,9 @@ interface BookingWaitingRoomProps {
 
 export default function BookingWaitingRoom({
   bookingCode,
+  facilityId,
   facilityName,
+  sportTypeId,
   sportTypeName,
   date,
   timeSlot,
@@ -168,9 +173,50 @@ export default function BookingWaitingRoom({
     toast.success(`เพิ่ม ${joinForm.firstName} ${joinForm.lastName} เข้าร่วมแล้ว!`);
   };
 
-  const handleConfirmBooking = () => {
-    toast.success("ยืนยันการจองสำเร็จ! กรุณาเช็คอินก่อนเวลาเริ่มใช้งาน 10-15 นาที");
-    onComplete();
+  const handleConfirmBooking = async () => {
+    try {
+      // Parse time slot
+      const timeParts = timeSlot.split(" - ");
+      const startTime = timeParts[0];
+      const endTime = timeParts[1];
+
+      // Create reservation data - only send required fields
+      const reservationData = {
+        userId: currentUser.id,
+        facilityId,
+        sportTypeId,
+        date: new Date(date).toISOString(),
+        startTime,
+        endTime,
+        playerCount: players.length,
+        notes: "",
+        // Additional metadata (optional)
+        bookingCode,
+        players: players.map(p => ({
+          userId: p.id,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          studentId: p.studentId,
+        })),
+      };
+
+      console.log("Sending reservation data:", reservationData);
+
+      // Save to database
+      const response = await reservationAPI.create(reservationData);
+      
+      console.log("API Response:", response);
+
+      if (!response.success) {
+        throw new Error(response.error || "Failed to save booking");
+      }
+
+      toast.success("ยืนยันการจองสำเร็จ! กรุณาเช็คอินก่อนเวลาเริ่มใช้งาน 10-15 นาที");
+      onComplete();
+    } catch (err: any) {
+      console.error("Error confirming booking:", err);
+      toast.error(err.message || "ไม่สามารถบันทึกการจองได้");
+    }
   };
 
   const progress = (players.length / requiredPlayers) * 100;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -18,8 +18,10 @@ import {
   Users,
   AlertCircle,
   ScanLine,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { checkinAPI, facilityAPI } from "../../../services/api";
 
 interface Player {
   id: string;
@@ -41,54 +43,73 @@ interface Booking {
   status: "waiting" | "in-progress" | "completed" | "no-show";
 }
 
-// Mock data
-const mockFacilities = [
-  { id: "1", name: "สนามฟุตบอล 1", sportType: "ฟุตบอล", requiredPlayers: 10 },
-  { id: "2", name: "สนามบาสเกตบอล A", sportType: "บาสเกตบอล", requiredPlayers: 10 },
-  { id: "3", name: "คอร์ทแบดมินตัน 1", sportType: "แบดมินตัน", requiredPlayers: 4 },
-  { id: "4", name: "คอร์ทแบดมินตัน 2", sportType: "แบดมินตัน", requiredPlayers: 4 },
-];
-
-const generateMockPlayers = (count: number): Player[] => {
-  const firstNames = ["สมชาย", "สมหญิง", "วิชัย", "ประภาส", "นิพนธ์", "สุภา", "อรุณ", "ชลิต", "พิมล", "วาสนา"];
-  const lastNames = ["ใจดี", "รักสนุก", "มีสุข", "ชอบกีฬา", "แข็งแรง", "วิ่งเร็ว", "เตะเก่ง", "โยนแม่น", "ตบดี", "เสิร์ฟเทพ"];
-  
-  return Array.from({ length: count }, (_, i) => ({
-    id: `player-${i + 1}`,
-    firstName: firstNames[i % firstNames.length],
-    lastName: lastNames[i % lastNames.length],
-    studentId: `200663020${String(24140 + i).padStart(5, "0")}`,
-    checkedIn: false,
-  }));
-};
-
-const mockBookings: Booking[] = [
-  {
-    id: "1",
-    bookingCode: "BK123456",
-    facilityName: "สนามฟุตบอล 1",
-    sportTypeName: "ฟุตบอล",
-    timeSlot: "14:00 - 16:00",
-    requiredPlayers: 10,
-    players: generateMockPlayers(10),
-    status: "waiting",
-  },
-  {
-    id: "2",
-    bookingCode: "BK789012",
-    facilityName: "สนามบาสเกตบอล A",
-    sportTypeName: "บาสเกตบอล",
-    timeSlot: "16:00 - 18:00",
-    requiredPlayers: 10,
-    players: generateMockPlayers(10),
-    status: "waiting",
-  },
-];
-
 export default function CheckInManagement() {
+  const [facilities, setFacilities] = useState<any[]>([]);
   const [selectedFacility, setSelectedFacility] = useState("");
-  const [bookings, setBookings] = useState<Booking[]>(mockBookings);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [scanInput, setScanInput] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Fetch facilities on mount
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      try {
+        setLoading(true);
+        const response = await facilityAPI.getAll();
+        if (response.success && response.data && Array.isArray(response.data)) {
+          setFacilities(response.data);
+          // Set first facility as default
+          if (response.data.length > 0) {
+            setSelectedFacility(response.data[0]._id);
+          }
+        }
+      } catch (err: any) {
+        console.error("Error fetching facilities:", err);
+        toast.error("ไม่สามารถโหลดสนามกีฬาได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFacilities();
+  }, []);
+
+  // Fetch check-ins for selected facility
+  useEffect(() => {
+    const fetchCheckIns = async () => {
+      if (!selectedFacility) return;
+      try {
+        const response = await checkinAPI.getTodayByFacility(selectedFacility);
+        if (response.success && response.data && Array.isArray(response.data)) {
+          // Transform check-in data to booking format
+          const transformedBookings: Booking[] = (response.data || []).map((checkin: any) => ({
+            id: checkin.reservationId,
+            bookingCode: checkin._id,
+            facilityName: selectedFacility,
+            sportTypeName: checkin.sportType,
+            timeSlot: `${checkin.startTime} - ${checkin.endTime}`,
+            requiredPlayers: 1,
+            players: [
+              {
+                id: checkin.userId,
+                firstName: checkin.firstName || "Unknown",
+                lastName: checkin.lastName || "User",
+                studentId: checkin.studentId || "",
+                checkedIn: checkin.checkedIn || false,
+                checkedInAt: checkin.checkInTime,
+              },
+            ],
+            status: (checkin.checkedIn ? "in-progress" : "waiting") as "waiting" | "in-progress" | "completed" | "no-show",
+          }));
+          setBookings(transformedBookings);
+        }
+      } catch (err: any) {
+        console.error("Error fetching check-ins:", err);
+      }
+    };
+
+    fetchCheckIns();
+  }, [selectedFacility]);
 
   const selectedBooking = bookings.find(
     (b) => b.facilityName === selectedFacility
@@ -184,9 +205,9 @@ export default function CheckInManagement() {
             <SelectValue placeholder="กรุณาเลือกสนาม..." />
           </SelectTrigger>
           <SelectContent>
-            {mockFacilities.map((facility) => (
-              <SelectItem key={facility.id} value={facility.name}>
-                {facility.name} - {facility.sportType}
+            {facilities.map((facility: any) => (
+              <SelectItem key={facility._id} value={facility._id || ""}>
+                {facility.name}
               </SelectItem>
             ))}
           </SelectContent>

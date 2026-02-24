@@ -44,6 +44,14 @@ const reservationSchema = new mongoose.Schema({
     required: true 
   },
   
+  // Players List
+  players: [{
+    userId: String,
+    firstName: String,
+    lastName: String,
+    studentId: String
+  }],
+  
   // Status Tracking
   status: {
     type: String,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
@@ -17,7 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search } from "lucide-react";
+import { Search, Loader2, AlertCircle } from "lucide-react";
+import { reservationAPI, userAPI } from "../../../services/api";
 
 interface Booking {
   id: string;
@@ -32,66 +33,6 @@ interface Booking {
   checkInTime?: string;
 }
 
-const mockBookings: Booking[] = [
-  {
-    id: "1",
-    facilityId: "1",
-    facilityName: "สนามฟุตบอล 1",
-    userId: "2",
-    userName: "สมหญิง รักเรียน",
-    date: "2026-02-20",
-    startTime: "14:00",
-    endTime: "16:00",
-    status: "confirmed",
-  },
-  {
-    id: "2",
-    facilityId: "2",
-    facilityName: "สนามบาสเกตบอล A",
-    userId: "3",
-    userName: "ประเสริฐ กีฬาดี",
-    date: "2026-02-19",
-    startTime: "16:00",
-    endTime: "17:30",
-    status: "checked-in",
-    checkInTime: "15:50",
-  },
-  {
-    id: "3",
-    facilityId: "3",
-    facilityName: "คอร์ทแบดมินตัน 1",
-    userId: "2",
-    userName: "สมหญิง รักเรียน",
-    date: "2026-02-18",
-    startTime: "10:00",
-    endTime: "11:00",
-    status: "completed",
-    checkInTime: "09:55",
-  },
-  {
-    id: "4",
-    facilityId: "1",
-    facilityName: "สนามฟุตบอล 1",
-    userId: "3",
-    userName: "ประเสริฐ กีฬาดี",
-    date: "2026-02-17",
-    startTime: "14:00",
-    endTime: "16:00",
-    status: "no-show",
-  },
-  {
-    id: "5",
-    facilityId: "2",
-    facilityName: "สนามบาสเกตบอล A",
-    userId: "2",
-    userName: "สมหญิง รักเรียน",
-    date: "2026-02-16",
-    startTime: "09:00",
-    endTime: "10:30",
-    status: "cancelled",
-  },
-];
-
 const statusConfig = {
   confirmed: { label: "จองแล้ว", color: "bg-blue-500" },
   "checked-in": { label: "เช็คอินแล้ว", color: "bg-green-500" },
@@ -101,9 +42,60 @@ const statusConfig = {
 };
 
 export default function BookingMonitor() {
-  const [bookings] = useState<Booking[]>(mockBookings);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch reservations and users
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all reservations
+        const reservationsRes = await reservationAPI.getAll();
+        if (!reservationsRes.success || !Array.isArray(reservationsRes.data)) {
+          throw new Error(reservationsRes.error || "Failed to fetch reservations");
+        }
+
+        // Fetch all users for name lookup
+        const usersRes = await userAPI.getAll();
+        if (usersRes.success && Array.isArray(usersRes.data)) {
+          setUsers(usersRes.data);
+        }
+
+        // Transform reservations to booking format
+        const bookingData: Booking[] = (reservationsRes.data || []).map((res: any) => {
+          const user = users.find((u) => u._id === res.userId);
+          return {
+            id: res._id,
+            facilityId: res.facilityId,
+            facilityName: res.facilityName || "Unknown Facility",
+            userId: res.userId,
+            userName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            date: res.date,
+            startTime: res.startTime,
+            endTime: res.endTime,
+            status: res.status || "confirmed",
+            checkInTime: res.checkInTime,
+          };
+        });
+
+        setBookings(bookingData);
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError(err.message || "Failed to load bookings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [users]);
 
   const filteredBookings = bookings.filter((booking) => {
     const matchesSearch =
@@ -118,24 +110,49 @@ export default function BookingMonitor() {
     <div className="space-y-4">
       <h2 className="text-2xl font-bold text-gray-800">ตรวจสอบการจอง</h2>
 
-      <Card className="p-4 border-2 border-teal-50">
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="ค้นหาด้วยชื่อผู้ใช้หรือชื่อสนาม..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 border-teal-200 focus:border-teal-500"
-            />
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+            <p className="text-sm text-red-700">{error}</p>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full md:w-[200px] border-teal-200 focus:border-teal-500">
-              <SelectValue placeholder="สถานะทั้งหมด" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">สถานะทั้งหมด</SelectItem>
-              <SelectItem value="confirmed">จองแล้ว</SelectItem>
+        </div>
+      )}
+
+      {loading && (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded flex-1 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {!loading && (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="ค้นหาด้วยชื่อผู้ใช้หรือชื่อสนาม..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 border-teal-200 focus:border-teal-500"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-[200px] border-teal-200 focus:border-teal-500">
+                <SelectValue placeholder="สถานะทั้งหมด" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">สถานะทั้งหมด</SelectItem>
+                <SelectItem value="confirmed">จองแล้ว</SelectItem>
               <SelectItem value="checked-in">เช็คอินแล้ว</SelectItem>
               <SelectItem value="completed">ใช้งานแล้ว</SelectItem>
               <SelectItem value="no-show">ไม่มา</SelectItem>
@@ -203,6 +220,7 @@ export default function BookingMonitor() {
           </Table>
         </div>
       </Card>
+      )}
     </div>
   );
 }

@@ -3,18 +3,19 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
-import { User, LogIn, KeyRound } from "lucide-react";
+import { User, LogIn, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { User as UserType } from "../App";
 import RegisterPage from "./RegisterPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
+import { userAPI } from "../../services/api";
 
 interface LoginPageProps {
   onLogin: (user: UserType) => void;
 }
 
-// Mock data for demo
-const mockUsers: UserType[] = [
+// Demo accounts for testing
+const DEMO_ACCOUNTS = [
   {
     id: "1",
     studentId: "6612345678",
@@ -73,40 +74,63 @@ const mockUsers: UserType[] = [
   },
 ];
 
-export const registeredUsers = mockUsers;
+export const registeredUsers: UserType[] = DEMO_ACCOUNTS as UserType[];
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!studentId.trim() || !password.trim()) {
       toast.error("กรุณากรอกรหัสนิสิตและรหัสผ่าน");
       return;
     }
 
-    const user = registeredUsers.find((u) => u.studentId === studentId);
-    if (!user) {
-      toast.error("ไม่พบรหัสนิสิตในระบบ");
-      return;
-    }
+    try {
+      setLoading(true);
 
-    if (user.password !== password) {
-      toast.error("รหัสผ่านไม่ถูกต้อง");
-      return;
-    }
+      // Try API login first (for registered users)
+      const loginResult = await userAPI.login(studentId, password);
+      
+      if (loginResult.success && loginResult.data) {
+        // Successful API login
+        const userData = loginResult.data as any;
+        toast.success(`ยินดีต้อนรับ ${userData.firstName} ${userData.lastName}`);
+        onLogin(userData as UserType);
+        return;
+      }
 
-    if (user.isBanned && user.bannedUntil && user.bannedUntil > new Date()) {
-      toast.error(
-        `บัญชีของคุณถูกระงับจนถึง ${user.bannedUntil.toLocaleDateString("th-TH")}`
-      );
-      return;
-    }
+      // Fallback to demo accounts for testing
+      const user = DEMO_ACCOUNTS.find((u) => u.studentId === studentId);
+      
+      if (!user) {
+        toast.error("ไม่พบรหัสนิสิตในระบบ");
+        return;
+      }
 
-    toast.success(`ยินดีต้อนรับ ${user.firstName} ${user.lastName}`);
-    onLogin(user);
+      if ((user as any).password !== password) {
+        toast.error("รหัสผ่านไม่ถูกต้อง");
+        return;
+      }
+
+      if ((user as any).isBanned && (user as any).bannedUntil && new Date((user as any).bannedUntil) > new Date()) {
+        toast.error(
+          `บัญชีของคุณถูกระงับจนถึง ${new Date((user as any).bannedUntil).toLocaleDateString("th-TH")}`
+        );
+        return;
+      }
+
+      toast.success(`ยินดีต้อนรับ ${user.firstName} ${user.lastName}`);
+      onLogin(user as UserType);
+    } catch (err: any) {
+      console.error("Login error:", err);
+      toast.error(err.message || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (showRegister) {
@@ -179,10 +203,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
           <Button
             onClick={handleLogin}
-            className="w-full bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white disabled:opacity-50"
           >
-            <LogIn className="w-4 h-4 mr-2" />
-            เข้าสู่ระบบ
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                กำลังเข้าสู่ระบบ...
+              </>
+            ) : (
+              <>
+                <LogIn className="w-4 h-4 mr-2" />
+                เข้าสู่ระบบ
+              </>
+            )}
           </Button>
 
           <div className="relative my-6">
