@@ -2,13 +2,14 @@ import { useState } from "react";
 import { User, SportType, Facility, Booking } from "../App";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
-import { LogOut, Settings, BarChart3, CalendarDays, ShieldAlert } from "lucide-react";
+import { LogOut, Settings, BarChart3, CalendarDays, ShieldAlert, Users } from "lucide-react";
 import { MobileNav } from "./ui/MobileNav";
 import { MobileTabs } from "./ui/MobileTabs";
 import FacilityManagement from "./admin/FacilityManagement";
 import SportTypeManagement from "./admin/SportTypeManagement";
 import BookingMonitor from "./admin/BookingMonitor";
 import UserPenalties from "./admin/UserPenalties";
+import UserManagement from "./admin/UserManagement";
 import ReportsDashboard from "./admin/ReportsDashboard";
 
 interface AdminDashboardProps {
@@ -36,6 +37,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
               { value: "facilities", label: "จัดการสนาม", icon: <Settings className="w-4 h-4" /> },
               { value: "sports", label: "ชนิดกีฬา", icon: <CalendarDays className="w-4 h-4" /> },
               { value: "bookings", label: "ตรวจสอบการจอง", icon: <CalendarDays className="w-4 h-4" /> },
+              { value: "users", label: "จัดการผู้ใช้", icon: <Users className="w-4 h-4" /> },
               { value: "penalties", label: "บทลงโทษ", icon: <ShieldAlert className="w-4 h-4" /> },
               { value: "reports", label: "รายงาน", icon: <BarChart3 className="w-4 h-4" /> },
             ]}
@@ -45,6 +47,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             {activeTab === "facilities" && <FacilityManagement />}
             {activeTab === "sports" && <SportTypeManagement />}
             {activeTab === "bookings" && <BookingMonitor />}
+            {activeTab === "users" && <UserManagement />}
             {activeTab === "penalties" && <UserPenalties />}
             {activeTab === "reports" && <ReportsDashboard />}
           </MobileTabs>

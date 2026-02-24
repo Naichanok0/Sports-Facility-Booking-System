@@ -126,7 +126,7 @@ router.post('/', async (req, res) => {
 // ✅ UPDATE user
 router.put('/:id', async (req, res) => {
   try {
-    const { firstName, lastName, phone, faculty, isActive, noShowCount, isBanned, banReason } = req.body;
+    const { firstName, lastName, phone, faculty, isActive, noShowCount, isBanned, banReason, role } = req.body;
 
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
@@ -139,6 +139,7 @@ router.put('/:id', async (req, res) => {
         noShowCount,
         isBanned,
         banReason,
+        role: role || undefined, // Only update role if provided
         updatedAt: new Date()
       },
       { new: true }
