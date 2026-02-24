@@ -97,12 +97,27 @@ router.post('/', async (req, res) => {
     const [endHour, endMin] = endTime.split(':').map(Number);
     const durationHours = (endHour - startHour) + (endMin - startMin) / 60;
 
+    // Parse date safely
+    let parsedDate;
+    try {
+      parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error('Invalid date format');
+      }
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format',
+        error: e.message
+      });
+    }
+
     const newReservation = new Reservation({
       reservationNo: bookingCode || generateReservationNo(),
       userId,
       facilityId,
       sportTypeId,
-      date: new Date(date),
+      date: parsedDate,
       startTime,
       endTime,
       durationHours,

@@ -196,7 +196,7 @@ export default function BookingPage({ user }: BookingPageProps) {
       facilityName: selectedFacilityData.name,
       sportTypeId: selectedFacilityData.sportTypeId || "",
       sportTypeName: sportType?.name || "ไม่ระบุ",
-      date: format(selectedDate, "d MMMM yyyy", { locale: th }),
+      date: format(selectedDate, "yyyy-MM-dd"), // Use ISO format for backend
       timeSlot: `${selectedTimeSlot!.start} - ${selectedTimeSlot!.end}`,
       requiredPlayers: selectedFacilityData.capacity || 0,
     });

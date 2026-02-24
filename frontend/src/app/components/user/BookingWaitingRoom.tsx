@@ -177,15 +177,19 @@ export default function BookingWaitingRoom({
     try {
       // Parse time slot
       const timeParts = timeSlot.split(" - ");
-      const startTime = timeParts[0];
-      const endTime = timeParts[1];
+      const startTime = timeParts[0]?.trim();
+      const endTime = timeParts[1]?.trim();
+
+      if (!startTime || !endTime) {
+        throw new Error("Invalid time slot format");
+      }
 
       // Create reservation data - only send required fields
       const reservationData = {
         userId: currentUser.id,
         facilityId,
         sportTypeId,
-        date: new Date(date).toISOString(),
+        date: date, // Keep as string, backend will parse it
         startTime,
         endTime,
         playerCount: players.length,
