@@ -145,22 +145,24 @@ router.post('/', async (req, res) => {
     }
 
     // Convert to object and ensure we have facility/sport names
-    const responseData = populatedReservation?.toObject?.() || savedReservation.toObject();
+    let responseData = populatedReservation?.toObject?.() || savedReservation.toObject();
     
-    // If populate didn't fill in names, add from request body
+    // If populate didn't fill in names, use the fallback names from request
     if (!responseData.facilityId?.name && facilityName) {
-      if (typeof responseData.facilityId === 'string') {
-        responseData.facilityId = { _id: responseData.facilityId, name: facilityName };
-      } else if (responseData.facilityId && !responseData.facilityId.name) {
-        responseData.facilityId.name = facilityName;
+      if (typeof responseData.facilityId === 'string' || typeof responseData.facilityId === 'object' && !responseData.facilityId.name) {
+        responseData.facilityId = { 
+          _id: responseData.facilityId?._id || responseData.facilityId, 
+          name: facilityName 
+        };
       }
     }
     
     if (!responseData.sportTypeId?.name && sportTypeName) {
-      if (typeof responseData.sportTypeId === 'string') {
-        responseData.sportTypeId = { _id: responseData.sportTypeId, name: sportTypeName };
-      } else if (responseData.sportTypeId && !responseData.sportTypeId.name) {
-        responseData.sportTypeId.name = sportTypeName;
+      if (typeof responseData.sportTypeId === 'string' || typeof responseData.sportTypeId === 'object' && !responseData.sportTypeId.name) {
+        responseData.sportTypeId = { 
+          _id: responseData.sportTypeId?._id || responseData.sportTypeId, 
+          name: sportTypeName 
+        };
       }
     }
 

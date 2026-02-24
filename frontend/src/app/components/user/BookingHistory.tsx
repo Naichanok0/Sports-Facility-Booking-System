@@ -51,12 +51,29 @@ async function mapReservationToBooking(
   reservation: any,
   facilities: any[]
 ): Promise<Booking> {
-  const facility = facilities.find((f) => f._id === reservation.facilityId);
+  // Try to get facility name from populated data first
+  let facilityName = "Unknown Facility";
+  if (reservation.facilityId) {
+    if (typeof reservation.facilityId === 'object' && reservation.facilityId.name) {
+      facilityName = reservation.facilityId.name;
+    } else if (typeof reservation.facilityId === 'string') {
+      const facility = facilities.find((f) => f._id === reservation.facilityId);
+      facilityName = facility?.name || "Unknown Facility";
+    }
+  }
+
+  // Try to get sport type name from populated data
+  let sportTypeName = "Unknown Sport";
+  if (reservation.sportTypeId) {
+    if (typeof reservation.sportTypeId === 'object' && reservation.sportTypeId.name) {
+      sportTypeName = reservation.sportTypeId.name;
+    }
+  }
 
   return {
     id: reservation._id,
-    facilityName: facility?.name || "Unknown Facility",
-    sportType: reservation.sportType || "Unknown Sport",
+    facilityName: facilityName,
+    sportType: sportTypeName,
     date: reservation.date,
     startTime: reservation.startTime,
     endTime: reservation.endTime,
