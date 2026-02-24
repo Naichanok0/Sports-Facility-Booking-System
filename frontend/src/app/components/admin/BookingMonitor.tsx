@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
   Select,
@@ -17,8 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Search, Loader2, AlertCircle } from "lucide-react";
+import { Search, Loader2, AlertCircle, CheckCircle, Trash2 } from "lucide-react";
 import { reservationAPI, userAPI } from "../../../services/api";
+import { toast } from "sonner";
 
 interface Booking {
   id: string;
@@ -48,6 +50,62 @@ export default function BookingMonitor() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Handle check-in
+  const handleCheckIn = async (bookingId: string) => {
+    try {
+      setActionLoading(bookingId);
+      const response = await reservationAPI.update(bookingId, {
+        status: "checked-in",
+        checkInTime: new Date().toISOString()
+      });
+      
+      if (!response.success) {
+        throw new Error(response.error || "Failed to check-in");
+      }
+      
+      // Update local state
+      setBookings(bookings.map(b => 
+        b.id === bookingId 
+          ? { ...b, status: "checked-in", checkInTime: new Date().toISOString() }
+          : b
+      ));
+      
+      toast.success("เช็คอินสำเร็จ");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to check-in");
+      console.error("Check-in error:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle delete/cancel
+  const handleCancel = async (bookingId: string) => {
+    if (!confirm("คุณต้องการยกเลิกการจองนี้ใช่หรือไม่?")) {
+      return;
+    }
+    
+    try {
+      setActionLoading(bookingId);
+      const response = await reservationAPI.cancel(bookingId, "ยกเลิกโดยผู้ดูแลระบบ");
+      
+      if (!response.success) {
+        throw new Error(response.error || "Failed to cancel");
+      }
+      
+      // Remove from local state immediately
+      setBookings(bookings.filter(b => b.id !== bookingId));
+      
+      toast.success("ยกเลิกการจองและลบรายการสำเร็จ");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel");
+      console.error("Cancel error:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // Fetch reservations and users
   useEffect(() => {
@@ -78,7 +136,23 @@ export default function BookingMonitor() {
 
         // Transform reservations to booking format
         const bookingData: Booking[] = (reservationsRes.data || []).map((res: any) => {
-          const user = userData.find((u) => u._id === res.userId);
+          // Extract user info from populated data or lookup
+          let userName = "Unknown User";
+          let userId = res.userId;
+          
+          if (res.userId) {
+            if (typeof res.userId === 'object' && res.userId.firstName) {
+              // Already populated
+              userName = `${res.userId.firstName} ${res.userId.lastName}`;
+              userId = res.userId._id;
+            } else if (typeof res.userId === 'string') {
+              // Need to lookup
+              const user = userData.find((u) => u._id === res.userId);
+              if (user) {
+                userName = `${user.firstName} ${user.lastName}`;
+              }
+            }
+          }
           
           // Extract facility name from populated data or fallback
           let facilityName = "Unknown Facility";
@@ -94,8 +168,8 @@ export default function BookingMonitor() {
             id: res._id,
             facilityId: typeof res.facilityId === 'object' ? res.facilityId._id : res.facilityId,
             facilityName: facilityName,
-            userId: res.userId,
-            userName: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+            userId: userId,
+            userName: userName,
             date: res.date,
             startTime: res.startTime,
             endTime: res.endTime,
@@ -200,12 +274,13 @@ export default function BookingMonitor() {
                 <TableHead>ผู้จอง</TableHead>
                 <TableHead>สถานะ</TableHead>
                 <TableHead>เช็คอิน</TableHead>
+                <TableHead className="text-right">การดำเนินการ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredBookings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
+                  <TableCell colSpan={7} className="text-center text-gray-500">
                     ไม่พบข้อมูลการจอง
                   </TableCell>
                 </TableRow>
@@ -240,6 +315,40 @@ export default function BookingMonitor() {
                         </span>
                       ) : (
                         <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      {booking.status === "confirmed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCheckIn(booking.id)}
+                          disabled={actionLoading === booking.id}
+                          className="border-green-200 text-green-600 hover:bg-green-50"
+                        >
+                          {actionLoading === booking.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                          )}
+                          เช็คอิน
+                        </Button>
+                      )}
+                      {booking.status !== "cancelled" && booking.status !== "completed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCancel(booking.id)}
+                          disabled={actionLoading === booking.id}
+                          className="border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          {actionLoading === booking.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4 mr-1" />
+                          )}
+                          ยกเลิก
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
