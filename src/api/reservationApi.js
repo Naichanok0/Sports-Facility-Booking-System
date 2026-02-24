@@ -79,6 +79,8 @@ router.post('/', async (req, res) => {
       notes = "",
       bookingCode,
       players,
+      facilityName,    // Accept these from frontend as fallback
+      sportTypeName,   // Accept these from frontend as fallback
       status = 'confirmed'
     } = req.body;
 
@@ -128,16 +130,44 @@ router.post('/', async (req, res) => {
     });
 
     const savedReservation = await newReservation.save();
-    await savedReservation.populate([
-      { path: 'userId', select: 'firstName lastName studentId barcode' },
-      { path: 'facilityId', select: 'name location pricePerHour' },
-      { path: 'sportTypeId', select: 'name' }
-    ]);
+    
+    // Try to populate references
+    let populatedReservation = savedReservation;
+    try {
+      populatedReservation = await Reservation.findById(savedReservation._id).populate([
+        { path: 'userId', select: 'firstName lastName studentId barcode' },
+        { path: 'facilityId', select: 'name location pricePerHour' },
+        { path: 'sportTypeId', select: 'name' }
+      ]);
+    } catch (popErr) {
+      // If population fails, continue with original
+      logger.warn('Population failed for reservation:', popErr.message);
+    }
+
+    // Convert to object and ensure we have facility/sport names
+    const responseData = populatedReservation?.toObject?.() || savedReservation.toObject();
+    
+    // If populate didn't fill in names, add from request body
+    if (!responseData.facilityId?.name && facilityName) {
+      if (typeof responseData.facilityId === 'string') {
+        responseData.facilityId = { _id: responseData.facilityId, name: facilityName };
+      } else if (responseData.facilityId && !responseData.facilityId.name) {
+        responseData.facilityId.name = facilityName;
+      }
+    }
+    
+    if (!responseData.sportTypeId?.name && sportTypeName) {
+      if (typeof responseData.sportTypeId === 'string') {
+        responseData.sportTypeId = { _id: responseData.sportTypeId, name: sportTypeName };
+      } else if (responseData.sportTypeId && !responseData.sportTypeId.name) {
+        responseData.sportTypeId.name = sportTypeName;
+      }
+    }
 
     res.status(201).json({
       success: true,
       message: 'Reservation created successfully',
-      data: savedReservation
+      data: responseData
     });
   } catch (error) {
     logger.error('Error creating reservation:', error);

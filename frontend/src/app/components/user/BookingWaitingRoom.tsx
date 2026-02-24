@@ -188,7 +188,9 @@ export default function BookingWaitingRoom({
       const reservationData = {
         userId: currentUser.id,
         facilityId,
+        facilityName,      // Add facility name as fallback
         sportTypeId,
+        sportTypeName,     // Add sport type name as fallback
         date: date, // Keep as string, backend will parse it
         startTime,
         endTime,
