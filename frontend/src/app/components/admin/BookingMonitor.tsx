@@ -51,6 +51,8 @@ export default function BookingMonitor() {
 
   // Fetch reservations and users
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -58,6 +60,8 @@ export default function BookingMonitor() {
 
         // Fetch all users first for name lookup
         const usersRes = await userAPI.getAll();
+        if (!isMounted) return;
+        
         let userData: any[] = [];
         if (usersRes.success && Array.isArray(usersRes.data)) {
           userData = usersRes.data;
@@ -66,6 +70,8 @@ export default function BookingMonitor() {
 
         // Fetch all reservations
         const reservationsRes = await reservationAPI.getAll();
+        if (!isMounted) return;
+        
         if (!reservationsRes.success || !Array.isArray(reservationsRes.data)) {
           throw new Error(reservationsRes.error || "Failed to fetch reservations");
         }
@@ -98,16 +104,26 @@ export default function BookingMonitor() {
           };
         });
 
-        setBookings(bookingData);
+        if (isMounted) {
+          setBookings(bookingData);
+        }
       } catch (err: any) {
         console.error("Error fetching data:", err);
-        setError(err.message || "Failed to load bookings");
+        if (isMounted) {
+          setError(err.message || "Failed to load bookings");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredBookings = bookings.filter((booking) => {

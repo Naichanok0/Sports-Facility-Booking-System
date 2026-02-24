@@ -6,12 +6,24 @@ const logger = require('../logger');
 // ✅ GET all users
 router.get('/', async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const limit = parseInt(req.query.limit) || 1000;
+    const skip = parseInt(req.query.skip) || 0;
+    
+    const users = await User.find()
+      .select('-passwordHash')
+      .limit(limit)
+      .skip(skip);
+      
+    const total = await User.countDocuments();
+    
     res.json({
       success: true,
       message: 'Users retrieved successfully',
       data: users,
-      count: users.length
+      count: users.length,
+      total: total,
+      limit: limit,
+      skip: skip
     });
   } catch (error) {
     logger.error('Error fetching users:', error);

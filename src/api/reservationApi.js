@@ -13,17 +13,27 @@ function generateReservationNo() {
 // ✅ GET all reservations
 router.get('/', async (req, res) => {
   try {
+    const limit = parseInt(req.query.limit) || 100;
+    const skip = parseInt(req.query.skip) || 0;
+    
     const reservations = await Reservation.find()
       .populate('userId', 'firstName lastName studentId barcode')
       .populate('facilityId', 'name location')
       .populate('sportTypeId', 'name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip);
+    
+    const total = await Reservation.countDocuments();
     
     res.json({
       success: true,
       message: 'Reservations retrieved successfully',
       data: reservations,
-      count: reservations.length
+      count: reservations.length,
+      total: total,
+      limit: limit,
+      skip: skip
     });
   } catch (error) {
     logger.error('Error fetching reservations:', error);
