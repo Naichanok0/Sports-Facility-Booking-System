@@ -55,6 +55,19 @@ const userSchema = new mongoose.Schema({
   bannedUntil: {
     type: Date
   },
+  banReason: {
+    type: String,
+    default: null
+  },
+  bannedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  bannedAt: {
+    type: Date,
+    default: null
+  },
   
   // No-show Tracking
   noShowCount: {

@@ -1,13 +1,116 @@
+import { useState, useEffect } from "react";
 import { User } from "../../App";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { CreditCard, User as UserIcon, Mail, Phone, Building2, CheckCircle, XCircle } from "lucide-react";
+import { CreditCard, User as UserIcon, Mail, Phone, Building2, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { userAPI, reservationAPI } from "../../../services/api";
+import { toast } from "sonner";
 
 interface ProfilePageProps {
   user: User;
 }
 
+interface UserStats {
+  totalBookings: number;
+  completed: number;
+  cancelled: number;
+  noShow: number;
+  checkedIn: number;
+  pending: number;
+  confirmed: number;
+  noShowCount: number;
+  isBanned: boolean;
+  bannedUntil?: string;
+}
+
 export default function ProfilePage({ user }: ProfilePageProps) {
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch user stats on component mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // First, try to get user profile with authentication
+        const profileRes = await userAPI.getByUsername(user.studentId);
+        if (profileRes.success && profileRes.data) {
+          const dbUser = profileRes.data as any;
+          const userId = dbUser._id || dbUser.id;
+
+          // Now fetch reservations for this user
+          const reservationsRes = await reservationAPI.getUserReservations(userId);
+          if (reservationsRes.success && Array.isArray(reservationsRes.data)) {
+            const bookings = reservationsRes.data;
+            
+            setStats({
+              totalBookings: bookings.length,
+              completed: bookings.filter((b: any) => b.status === "completed").length,
+              cancelled: bookings.filter((b: any) => b.status === "cancelled").length,
+              noShow: bookings.filter((b: any) => b.status === "no-show").length,
+              checkedIn: bookings.filter((b: any) => b.status === "checked-in").length,
+              pending: bookings.filter((b: any) => b.status === "pending").length,
+              confirmed: bookings.filter((b: any) => b.status === "confirmed").length,
+              noShowCount: dbUser.noShowCount || 0,
+              isBanned: dbUser.isBanned || false,
+              bannedUntil: dbUser.bannedUntil,
+            });
+            return;
+          }
+        }
+
+        // Try to get stats from API endpoint
+        const response = await userAPI.getStats();
+        if (response.success) {
+          setStats(response.data as UserStats);
+          return;
+        }
+
+        // Fallback: use data from user object (demo mode)
+        if (user.noShowCount !== undefined) {
+          setStats({
+            totalBookings: 0,
+            completed: 0,
+            cancelled: 0,
+            noShow: user.noShowCount || 0,
+            checkedIn: 0,
+            pending: 0,
+            confirmed: 0,
+            noShowCount: user.noShowCount || 0,
+            isBanned: user.isBanned || false,
+            bannedUntil: user.bannedUntil ? user.bannedUntil.toString() : undefined,
+          });
+        }
+      } catch (err: any) {
+        console.error("Error fetching stats:", err);
+        // Fallback to demo data
+        if (user.noShowCount !== undefined) {
+          setStats({
+            totalBookings: 0,
+            completed: 0,
+            cancelled: 0,
+            noShow: user.noShowCount || 0,
+            checkedIn: 0,
+            pending: 0,
+            confirmed: 0,
+            noShowCount: user.noShowCount || 0,
+            isBanned: user.isBanned || false,
+            bannedUntil: user.bannedUntil ? user.bannedUntil.toString() : undefined,
+          });
+        } else {
+          setError("ไม่สามารถโหลดสถิติได้");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [user]);
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-800">ข้อมูลส่วนตัว</h2>
@@ -88,27 +191,40 @@ export default function ProfilePage({ user }: ProfilePageProps) {
               สถิติการใช้งาน
             </h3>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
-                <p className="text-3xl font-bold text-teal-600">12</p>
-                <p className="text-sm text-gray-600 mt-1">ครั้งที่จอง</p>
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 mb-4">
+                <AlertCircle className="w-5 h-5" />
+                <span className="text-sm">{error}</span>
               </div>
+            )}
 
-              <div className="text-center p-4 bg-gradient-to-br from-green-50 to-white rounded-lg">
-                <p className="text-3xl font-bold text-green-600">10</p>
-                <p className="text-sm text-gray-600 mt-1">ใช้งานสำเร็จ</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
               </div>
+            ) : stats ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
+                  <p className="text-3xl font-bold text-teal-600">{stats.totalBookings}</p>
+                  <p className="text-sm text-gray-600 mt-1">ครั้งที่จอง</p>
+                </div>
 
-              <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-white rounded-lg">
-                <p className="text-3xl font-bold text-orange-600">1</p>
-                <p className="text-sm text-gray-600 mt-1">ยกเลิก</p>
-              </div>
+                <div className="text-center p-4 bg-gradient-to-br from-green-50 to-white rounded-lg">
+                  <p className="text-3xl font-bold text-green-600">{stats.completed}</p>
+                  <p className="text-sm text-gray-600 mt-1">ใช้งานสำเร็จ</p>
+                </div>
 
-              <div className="text-center p-4 bg-gradient-to-br from-red-50 to-white rounded-lg">
-                <p className="text-3xl font-bold text-red-600">1</p>
-                <p className="text-sm text-gray-600 mt-1">ไม่มาใช้งาน</p>
+                <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-white rounded-lg">
+                  <p className="text-3xl font-bold text-orange-600">{stats.cancelled}</p>
+                  <p className="text-sm text-gray-600 mt-1">ยกเลิก</p>
+                </div>
+
+                <div className="text-center p-4 bg-gradient-to-br from-red-50 to-white rounded-lg">
+                  <p className="text-3xl font-bold text-red-600">{stats.noShow}</p>
+                  <p className="text-sm text-gray-600 mt-1">ไม่มาใช้งาน</p>
+                </div>
               </div>
-            </div>
+            ) : null}
           </Card>
         </div>
 
@@ -117,45 +233,51 @@ export default function ProfilePage({ user }: ProfilePageProps) {
           <Card className="p-6 border-2 border-teal-50">
             <h3 className="text-lg font-bold text-gray-800 mb-4">สถานะบัญชี</h3>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border-2 border-green-200">
-                <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="text-sm font-medium text-gray-700">
-                    สถานะการใช้งาน
-                  </span>
-                </div>
-                <Badge className="bg-green-500 hover:bg-green-600">
-                  ปกติ
-                </Badge>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
               </div>
-
-              {user.isBanned ? (
-                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border-2 border-red-200">
-                  <div className="flex items-center">
-                    <XCircle className="w-5 h-5 text-red-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">
-                      สิทธิ์การจอง
-                    </span>
-                  </div>
-                  <Badge className="bg-red-500 hover:bg-red-600">
-                    ถูกระงับ
-                  </Badge>
-                </div>
-              ) : (
+            ) : (
+              <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border-2 border-green-200">
                   <div className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                     <span className="text-sm font-medium text-gray-700">
-                      สิทธิ์การจอง
+                      สถานะการใช้งาน
                     </span>
                   </div>
                   <Badge className="bg-green-500 hover:bg-green-600">
                     ปกติ
                   </Badge>
                 </div>
-              )}
-            </div>
+
+                {stats?.isBanned ? (
+                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border-2 border-red-200">
+                    <div className="flex items-center">
+                      <XCircle className="w-5 h-5 text-red-600 mr-2" />
+                      <span className="text-sm font-medium text-gray-700">
+                        สิทธิ์การจอง
+                      </span>
+                    </div>
+                    <Badge className="bg-red-500 hover:bg-red-600">
+                      ถูกระงับ
+                    </Badge>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border-2 border-green-200">
+                    <div className="flex items-center">
+                      <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                      <span className="text-sm font-medium text-gray-700">
+                        สิทธิ์การจอง
+                      </span>
+                    </div>
+                    <Badge className="bg-green-500 hover:bg-green-600">
+                      ปกติ
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
 
           <Card className="p-6 border-2 border-teal-50 bg-gradient-to-br from-yellow-50 to-orange-50">

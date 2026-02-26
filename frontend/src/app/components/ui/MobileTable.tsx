@@ -56,10 +56,10 @@ export function MobileTable({
           </thead>
           <tbody>
             {data.map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50">
+              <tr key={row.id || row._id || idx} className="border-b hover:bg-gray-50">
                 {columns.map((col) => (
                   <td
-                    key={`${idx}-${col.key}`}
+                    key={`${row.id || row._id || idx}-${col.key}`}
                     className={cn("px-4 py-3 text-sm text-gray-700", col.className)}
                   >
                     {col.render ? col.render(row[col.key], row) : row[col.key]}
@@ -74,9 +74,9 @@ export function MobileTable({
       {/* Mobile Card View */}
       <div className="md:hidden space-y-3">
         {data.map((row, idx) => (
-          <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+          <div key={row.id || row._id || idx} className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
             {columns.map((col) => (
-              <div key={`${idx}-${col.key}`} className="flex justify-between gap-2">
+              <div key={`${row.id || row._id || idx}-${col.key}`} className="flex justify-between gap-2">
                 <span className="font-medium text-gray-700 text-sm">{col.label}:</span>
                 <span className={cn("text-sm text-gray-600 flex-1 text-right", col.className)}>
                   {col.render ? col.render(row[col.key], row) : row[col.key]}

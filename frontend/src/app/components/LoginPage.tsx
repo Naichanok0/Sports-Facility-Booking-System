@@ -3,12 +3,20 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
-import { User, LogIn, KeyRound, Loader2 } from "lucide-react";
+import { User, LogIn, KeyRound, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { User as UserType } from "../App";
 import RegisterPage from "./RegisterPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import { userAPI } from "../../services/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { format, differenceInDays } from "date-fns";
+import { th } from "date-fns/locale";
 
 interface LoginPageProps {
   onLogin: (user: UserType) => void;
@@ -82,6 +90,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [banInfo, setBanInfo] = useState<{
+    reason: string;
+    bannedUntil: Date;
+    userName: string;
+  } | null>(null);
 
   const handleLogin = async () => {
     if (!studentId.trim() || !password.trim()) {
@@ -98,6 +111,22 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       if (loginResult.success && loginResult.data) {
         // Successful API login
         const userData = loginResult.data as any;
+        
+        // Check if user is banned (from API response)
+        if (userData.isBanned && userData.bannedUntil && new Date(userData.bannedUntil) > new Date()) {
+          setBanInfo({
+            reason: userData.banReason || "ระงับสิทธิ์โดยผู้ดูแลระบบ",
+            bannedUntil: new Date(userData.bannedUntil),
+            userName: `${userData.firstName} ${userData.lastName}`,
+          });
+          return;
+        }
+        
+        // Save token to localStorage if provided
+        if (userData.token) {
+          localStorage.setItem('token', userData.token);
+        }
+        
         toast.success(`ยินดีต้อนรับ ${userData.firstName} ${userData.lastName}`);
         onLogin(userData as UserType);
         return;
@@ -117,11 +146,24 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       }
 
       if ((user as any).isBanned && (user as any).bannedUntil && new Date((user as any).bannedUntil) > new Date()) {
-        toast.error(
-          `บัญชีของคุณถูกระงับจนถึง ${new Date((user as any).bannedUntil).toLocaleDateString("th-TH")}`
-        );
+        setBanInfo({
+          reason: (user as any).banReason || "ระงับสิทธิ์โดยผู้ดูแลระบบ",
+          bannedUntil: new Date((user as any).bannedUntil),
+          userName: `${user.firstName} ${user.lastName}`,
+        });
         return;
       }
+
+      // For demo accounts, create a fake token (in production, get from API)
+      // This allows the app to work with both demo and real accounts
+      const fakeToken = btoa(JSON.stringify({ 
+        _id: user.id, 
+        studentId: user.studentId,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName
+      }));
+      localStorage.setItem('token', fakeToken);
 
       toast.success(`ยินดีต้อนรับ ${user.firstName} ${user.lastName}`);
       onLogin(user as UserType);
@@ -248,6 +290,65 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         </div>
       </Card>
+
+      {/* Ban Dialog */}
+      <Dialog open={!!banInfo} onOpenChange={() => setBanInfo(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <DialogTitle className="text-lg">บัญชีถูกระงับสิทธิ์</DialogTitle>
+            </div>
+          </DialogHeader>
+
+          {banInfo && (
+            <div className="space-y-4 py-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                <div>
+                  <p className="text-sm text-gray-600">ชื่อผู้ใช้:</p>
+                  <p className="font-semibold text-gray-900">{banInfo.userName}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">เหตุผลในการระงับสิทธิ์:</p>
+                  <p className="font-semibold text-gray-900">{banInfo.reason}</p>
+                </div>
+
+                <div className="bg-white rounded p-3 space-y-2 border border-red-100">
+                  <div className="text-sm">
+                    <p className="text-gray-600">ระงับถึงวันที่:</p>
+                    <p className="text-lg font-bold text-red-600">
+                      {format(banInfo.bannedUntil, "d MMMM yyyy HH:mm", {
+                        locale: th,
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="text-sm pt-2 border-t border-red-100">
+                    <p className="text-gray-600 mb-1">เหลือเวลา:</p>
+                    <p className="text-lg font-bold text-orange-600">
+                      {differenceInDays(banInfo.bannedUntil, new Date())} วัน
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 text-center py-2">
+                หลังจากครบกำหนดระงับ บัญชีของคุณจะถูกปลดล็อคโดยอัตโนมัติ
+              </p>
+
+              <Button
+                onClick={() => setBanInfo(null)}
+                className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white"
+              >
+                ปิด
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -20,11 +20,19 @@ export async function apiCall<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const headers: any = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    // Try to get token from localStorage
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
 
@@ -76,7 +84,15 @@ export const userAPI = {
   }),
   delete: (id: string) => apiCall(`/users/${id}`, {
     method: 'DELETE'
-  })
+  }),
+  ban: (id: string, reason: string, bannedUntil: Date) => apiCall(`/users/${id}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, bannedUntil })
+  }),
+  unban: (id: string) => apiCall(`/users/${id}/unban`, {
+    method: 'POST'
+  }),
+  getStats: () => apiCall('/users/stats')
 };
 
 /**

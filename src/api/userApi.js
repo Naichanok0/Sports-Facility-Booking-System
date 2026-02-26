@@ -287,4 +287,83 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ✅ BAN user - POST /api/users/:id/ban
+router.post('/:id/ban', async (req, res) => {
+  try {
+    const { reason, bannedUntil } = req.body;
+    
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ban reason is required'
+      });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    user.isBanned = true;
+    user.banReason = reason;
+    user.bannedAt = new Date();
+    user.bannedUntil = bannedUntil ? new Date(bannedUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default 30 days
+    
+    await user.save();
+
+    logger.info(`User ${user.studentId} banned: ${reason}`);
+    
+    res.json({
+      success: true,
+      message: 'User banned successfully',
+      data: user
+    });
+  } catch (error) {
+    logger.error('Error banning user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error banning user',
+      error: error.message
+    });
+  }
+});
+
+// ✅ UNBAN user - POST /api/users/:id/unban
+router.post('/:id/unban', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    user.isBanned = false;
+    user.banReason = null;
+    user.bannedAt = null;
+    user.bannedUntil = null;
+    
+    await user.save();
+
+    logger.info(`User ${user.studentId} unbanned`);
+    
+    res.json({
+      success: true,
+      message: 'User unbanned successfully',
+      data: user
+    });
+  } catch (error) {
+    logger.error('Error unbanning user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error unbanning user',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

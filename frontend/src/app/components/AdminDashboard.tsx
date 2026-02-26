@@ -20,13 +20,18 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState("facilities");
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    onLogout();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-cyan-50">
       {/* Header */}
       <MobileNav
         title="ระบบจัดการสนามกีฬา"
         subtitle={`ผู้ดูแลระบบ - ${user.firstName} ${user.lastName}`}
-        onLogout={onLogout}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}

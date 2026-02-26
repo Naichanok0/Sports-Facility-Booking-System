@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import {
   Table,
   TableBody,
@@ -9,8 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Calendar, Clock, Loader2, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
+import { Calendar, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { format, addDays, subDays } from "date-fns";
 import { th } from "date-fns/locale";
 import { reservationAPI } from "../../../services/api";
 import { toast } from "sonner";
@@ -37,6 +39,7 @@ export default function TodayBookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Fetch today's bookings
   useEffect(() => {
@@ -50,15 +53,33 @@ export default function TodayBookings() {
           throw new Error(response.error || "Failed to fetch bookings");
         }
 
-        // Filter for today's bookings
-        const today = new Date().toISOString().split('T')[0];
+        // Get selected date in local timezone
+        const filterDate = new Date(selectedDate);
+        filterDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(filterDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
         const todayBookings: Booking[] = (response.data || [])
-          .filter((res: any) => res.date === today)
+          .filter((res: any) => {
+            // Parse date properly handling UTC/local timezone
+            let resDate: Date;
+            if (typeof res.date === 'string') {
+              resDate = new Date(res.date);
+            } else {
+              resDate = new Date(res.date);
+            }
+            
+            // Convert UTC to local date
+            const localResDate = new Date(resDate.getTime() - resDate.getTimezoneOffset() * 60000);
+            localResDate.setHours(0, 0, 0, 0);
+            
+            return localResDate >= filterDate && localResDate < nextDay;
+          })
           .map((res: any) => ({
             id: res._id,
-            facilityName: res.facilityName || "Unknown Facility",
-            userName: res.userName || "Unknown User",
-            userBarcode: res.userBarcode || "-",
+            facilityName: res.facilityId?.name || "Unknown Facility",
+            userName: res.userId?.firstName || "Unknown User",
+            userBarcode: res.userId?.studentId || res.userId?.barcode || "-",
             startTime: res.startTime || "-",
             endTime: res.endTime || "-",
             status: res.status || "confirmed",
@@ -76,9 +97,21 @@ export default function TodayBookings() {
     };
 
     fetchBookings();
-  }, []);
+  }, [selectedDate]);
 
-  const today = new Date();
+  const handlePrevDate = () => {
+    setSelectedDate(subDays(selectedDate, 1));
+  };
+
+  const handleNextDate = () => {
+    setSelectedDate(addDays(selectedDate, 1));
+  };
+
+  const handleToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  const today = selectedDate;
   const stats = {
     total: bookings.length,
     confirmed: bookings.filter((b) => b.status === "confirmed").length,
@@ -90,12 +123,60 @@ export default function TodayBookings() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">การจองวันนี้</h2>
+        <h2 className="text-2xl font-bold text-gray-800">การจองรายวัน</h2>
         <Badge className="text-base bg-gradient-to-r from-teal-500 to-blue-500">
           <Calendar className="w-4 h-4 mr-2" />
           {format(today, "d MMMM yyyy", { locale: th })}
         </Badge>
       </div>
+
+      {/* Date Picker Card */}
+      <Card className="p-6 border-2 border-teal-100 bg-gradient-to-r from-teal-50 to-blue-50">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handlePrevDate}
+              variant="outline"
+              size="sm"
+              className="border-teal-300 hover:bg-teal-100"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+
+            <Input
+              type="date"
+              value={format(selectedDate, "yyyy-MM-dd")}
+              onChange={(e) => setSelectedDate(new Date(e.target.value))}
+              className="border-teal-300 focus:border-teal-500"
+            />
+
+            <Button
+              onClick={handleNextDate}
+              variant="outline"
+              size="sm"
+              className="border-teal-300 hover:bg-teal-100"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+
+            <Button
+              onClick={handleToday}
+              variant="outline"
+              size="sm"
+              className="border-teal-300 hover:bg-teal-100"
+            >
+              วันนี้
+            </Button>
+          </div>
+
+          <div className="text-right">
+            <div className="text-sm text-gray-600">เลือกวันที่</div>
+            <div className="text-lg font-bold text-teal-700">
+              {format(selectedDate, "d MMM yyyy", { locale: th })}
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {error && (
         <Card className="p-4 bg-red-50 border-2 border-red-200">

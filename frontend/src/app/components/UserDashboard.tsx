@@ -25,13 +25,18 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setActiveTab("history");
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    onLogout();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-cyan-50">
       {/* Header */}
       <MobileNav
         title="ระบบจองสนามกีฬา"
         subtitle={`ยินดีต้อนรับ, ${user.firstName} ${user.lastName}`}
-        onLogout={onLogout}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}

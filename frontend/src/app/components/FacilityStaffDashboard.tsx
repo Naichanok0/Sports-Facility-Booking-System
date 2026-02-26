@@ -20,13 +20,18 @@ export default function FacilityStaffDashboard({
 }: FacilityStaffDashboardProps) {
   const [activeTab, setActiveTab] = useState("checkin");
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    onLogout();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-cyan-50">
       {/* Header */}
       <MobileNav
         title="ระบบจัดการสนามกีฬา"
         subtitle={`ผู้ดูแลสนาม - ${user.firstName} ${user.lastName}`}
-        onLogout={onLogout}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}

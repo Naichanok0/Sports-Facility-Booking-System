@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -21,10 +21,11 @@ import {
 } from "../ui/dialog";
 import { Calendar } from "../ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { ShieldAlert, CalendarIcon, Ban, Check } from "lucide-react";
+import { ShieldAlert, CalendarIcon, Ban, Check, Loader2, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
+import { userAPI } from "../../../services/api";
 
 interface UserPenalty {
   id: string;
@@ -60,47 +61,153 @@ const mockPenalties: UserPenalty[] = [
 export default function UserPenalties() {
   const [penalties, setPenalties] = useState<UserPenalty[]>(mockPenalties);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [formData, setFormData] = useState({
     barcode: "",
-    userName: "",
     reason: "",
     bannedUntil: new Date(),
   });
 
-  const handleSubmit = () => {
-    if (!formData.barcode || !formData.userName || !formData.reason) {
-      toast.error("กรุณากรอกข้อมูลให้ครบถ้วน");
+  // Fetch penalties on component mount
+  useEffect(() => {
+    const fetchPenalties = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all users to get banned users
+        const usersRes = await userAPI.getAll();
+        if (!usersRes.success || !Array.isArray(usersRes.data)) {
+          throw new Error(usersRes.error || "Failed to fetch users");
+        }
+
+        setAllUsers(usersRes.data || []);
+
+        // Filter users who are banned
+        const bannedUsers: UserPenalty[] = (usersRes.data || [])
+          .filter((user: any) => user.isBanned)
+          .map((user: any) => ({
+            id: user._id,
+            userId: user._id,
+            userName: `${user.firstName} ${user.lastName}`,
+            barcode: user.studentId || user.barcode || "-",
+            reason: user.banReason || "ระงับสิทธิ์โดยผู้ดูแลระบบ",
+            bannedUntil: new Date(user.bannedUntil || new Date()),
+            isActive: user.isBanned,
+          }));
+
+        setPenalties(bannedUsers);
+      } catch (err: any) {
+        console.error("Error fetching penalties:", err);
+        setError(err.message || "Failed to load penalties");
+        toast.error("ไม่สามารถโหลดข้อมูลบทลงโทษได้");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPenalties();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!selectedUser || !formData.reason) {
+      toast.error("กรุณาเลือกผู้ใช้งานและกรอกเหตุผล");
       return;
     }
 
-    const newPenalty: UserPenalty = {
-      id: Date.now().toString(),
-      userId: Date.now().toString(),
-      userName: formData.userName,
-      barcode: formData.barcode,
-      reason: formData.reason,
-      bannedUntil: formData.bannedUntil,
-      isActive: true,
-    };
+    try {
+      // Call ban API
+      const banRes = await userAPI.ban(selectedUser._id, formData.reason, formData.bannedUntil);
+      
+      if (!banRes.success) {
+        toast.error(banRes.message || "ไม่สามารถระงับสิทธิ์ได้");
+        return;
+      }
 
-    setPenalties([newPenalty, ...penalties]);
-    toast.success("ระงับสิทธิ์ผู้ใช้งานสำเร็จ");
-    setIsDialogOpen(false);
-    setFormData({
-      barcode: "",
-      userName: "",
-      reason: "",
-      bannedUntil: new Date(),
-    });
+      // Refetch penalties
+      const updatedUsersRes = await userAPI.getAll();
+      const updatedUserList = Array.isArray(updatedUsersRes.data) ? updatedUsersRes.data : [];
+      setAllUsers(updatedUserList);
+      
+      const bannedUsers: UserPenalty[] = updatedUserList
+        .filter((u: any) => u.isBanned)
+        .map((u: any) => ({
+          id: u._id,
+          userId: u._id,
+          userName: `${u.firstName} ${u.lastName}`,
+          barcode: u.studentId || u.barcode || "-",
+          reason: u.banReason || "ระงับสิทธิ์โดยผู้ดูแลระบบ",
+          bannedUntil: new Date(u.bannedUntil || new Date()),
+          isActive: u.isBanned,
+        }));
+
+      setPenalties(bannedUsers);
+      toast.success("ระงับสิทธิ์ผู้ใช้งานสำเร็จ");
+      setIsDialogOpen(false);
+      setSelectedUser(null);
+      setSearchQuery("");
+      setFormData({
+        barcode: "",
+        reason: "",
+        bannedUntil: new Date(),
+      });
+    } catch (err: any) {
+      console.error("Error banning user:", err);
+      toast.error(err.message || "เกิดข้อผิดพลาดในการระงับสิทธิ์");
+    }
   };
 
-  const handleUnban = (penaltyId: string) => {
-    setPenalties(
-      penalties.map((p) =>
-        p.id === penaltyId ? { ...p, isActive: false } : p
+  const handleUnban = async (penaltyId: string) => {
+    try {
+      const unbanRes = await userAPI.unban(penaltyId);
+      
+      if (!unbanRes.success) {
+        toast.error(unbanRes.message || "ไม่สามารถยกเลิกการระงับสิทธิ์ได้");
+        return;
+      }
+
+      // Refetch penalties
+      const usersRes = await userAPI.getAll();
+      const userList = Array.isArray(usersRes.data) ? usersRes.data : [];
+      setAllUsers(userList);
+      
+      const bannedUsers: UserPenalty[] = userList
+        .filter((u: any) => u.isBanned)
+        .map((u: any) => ({
+          id: u._id,
+          userId: u._id,
+          userName: `${u.firstName} ${u.lastName}`,
+          barcode: u.studentId || u.barcode || "-",
+          reason: u.banReason || "ระงับสิทธิ์โดยผู้ดูแลระบบ",
+          bannedUntil: new Date(u.bannedUntil || new Date()),
+          isActive: u.isBanned,
+        }));
+
+      setPenalties(bannedUsers);
+      toast.success("ยกเลิกการระงับสิทธิ์แล้ว");
+    } catch (err: any) {
+      console.error("Error unbanning user:", err);
+      toast.error(err.message || "เกิดข้อผิดพลาดในการยกเลิกการระงับสิทธิ์");
+    }
+  };
+
+  const getFilteredUsers = () => {
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase();
+    return allUsers.filter((u: any) => 
+      !u.isBanned && (
+        u.firstName?.toLowerCase().includes(query) ||
+        u.lastName?.toLowerCase().includes(query) ||
+        u.studentId?.includes(query) ||
+        u.username?.includes(query)
       )
-    );
-    toast.success("ยกเลิกการระงับสิทธิ์แล้ว");
+    ).slice(0, 8); // Show max 8 suggestions
   };
 
   const isExpired = (date: Date) => {
@@ -124,30 +231,57 @@ export default function UserPenalties() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="barcode">เลขบาร์โค้ดบัตรนิสิต</Label>
-                <Input
-                  id="barcode"
-                  value={formData.barcode}
-                  onChange={(e) =>
-                    setFormData({ ...formData, barcode: e.target.value })
-                  }
-                  placeholder="เช่น 6612345678"
-                  maxLength={10}
-                  className="border-teal-200 focus:border-teal-500"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="userName">ชื่อ-นามสกุล</Label>
-                <Input
-                  id="userName"
-                  value={formData.userName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, userName: e.target.value })
-                  }
-                  placeholder="ชื่อผู้ใช้งาน"
-                  className="border-teal-200 focus:border-teal-500"
-                />
+                <Label htmlFor="search">ค้นหาผู้ใช้งาน</Label>
+                <div className="relative">
+                  <Input
+                    id="search"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder="ค้นหาจากชื่อ รหัสนิสิต หรือชื่อผู้ใช้"
+                    className="border-teal-200 focus:border-teal-500"
+                  />
+                  {showSuggestions && getFilteredUsers().length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-teal-200 rounded-md shadow-lg z-10">
+                      {getFilteredUsers().map((user: any) => (
+                        <button
+                          key={user._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setSearchQuery(`${user.firstName} ${user.lastName}`);
+                            setShowSuggestions(false);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-teal-50 border-b last:border-b-0 text-sm"
+                        >
+                          <div className="font-medium">{user.firstName} {user.lastName}</div>
+                          <div className="text-gray-500 text-xs">{user.studentId} • {user.username}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedUser && (
+                  <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-md flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-800">{selectedUser.firstName} {selectedUser.lastName}</p>
+                      <p className="text-sm text-gray-600">{selectedUser.studentId}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUser(null);
+                        setSearchQuery("");
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -201,77 +335,98 @@ export default function UserPenalties() {
         </Dialog>
       </div>
 
-      <Card className="p-4 border-2 border-teal-50">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
-                <TableHead>บาร์โค้ด</TableHead>
-                <TableHead>ชื่อ-นามสกุล</TableHead>
-                <TableHead>เหตุผล</TableHead>
-                <TableHead>ระงับถึงวันที่</TableHead>
-                <TableHead>สถานะ</TableHead>
-                <TableHead>การกระทำ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {penalties.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
-                    ไม่มีรายการบทลงโทษ
-                  </TableCell>
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-red-900">เกิดข้อผิดพลาด</h3>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <Card className="p-8 border-2 border-teal-50">
+          <div className="flex items-center justify-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
+            <span className="text-gray-600">กำลังโหลดข้อมูล...</span>
+          </div>
+        </Card>
+      )}
+
+      {!loading && (
+        <Card className="p-4 border-2 border-teal-50">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
+                  <TableHead>บาร์โค้ด</TableHead>
+                  <TableHead>ชื่อ-นามสกุล</TableHead>
+                  <TableHead>เหตุผล</TableHead>
+                  <TableHead>ระงับถึงวันที่</TableHead>
+                  <TableHead>สถานะ</TableHead>
+                  <TableHead>การกระทำ</TableHead>
                 </TableRow>
-              ) : (
-                penalties.map((penalty) => (
-                  <TableRow key={penalty.id} className="hover:bg-teal-50/50">
-                    <TableCell className="font-mono">
-                      {penalty.barcode}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {penalty.userName}
-                    </TableCell>
-                    <TableCell>{penalty.reason}</TableCell>
-                    <TableCell>
-                      {format(penalty.bannedUntil, "d MMM yyyy", {
-                        locale: th,
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {!penalty.isActive ? (
-                        <Badge className="bg-gray-500 hover:bg-gray-600">
-                          ยกเลิกแล้ว
-                        </Badge>
-                      ) : isExpired(penalty.bannedUntil) ? (
-                        <Badge className="bg-green-500 hover:bg-green-600">
-                          หมดอายุ
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-red-500 hover:bg-red-600">
-                          กำลังระงับ
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {penalty.isActive &&
-                        !isExpired(penalty.bannedUntil) && (
-                          <Button
-                            onClick={() => handleUnban(penalty.id)}
-                            size="sm"
-                            variant="outline"
-                            className="border-green-300 text-green-700 hover:bg-green-50"
-                          >
-                            <Check className="w-4 h-4 mr-1" />
-                            ยกเลิกระงับ
-                          </Button>
-                        )}
+              </TableHeader>
+              <TableBody>
+                {penalties.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-gray-500">
+                      ไม่มีรายการบทลงโทษ
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+                ) : (
+                  penalties.map((penalty) => (
+                    <TableRow key={penalty.id} className="hover:bg-teal-50/50">
+                      <TableCell className="font-mono">
+                        {penalty.barcode}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {penalty.userName}
+                      </TableCell>
+                      <TableCell>{penalty.reason}</TableCell>
+                      <TableCell>
+                        {format(penalty.bannedUntil, "d MMM yyyy", {
+                          locale: th,
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {!penalty.isActive ? (
+                          <Badge className="bg-gray-500 hover:bg-gray-600">
+                            ยกเลิกแล้ว
+                          </Badge>
+                        ) : isExpired(penalty.bannedUntil) ? (
+                          <Badge className="bg-green-500 hover:bg-green-600">
+                            หมดอายุ
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-500 hover:bg-red-600">
+                            กำลังระงับ
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {penalty.isActive &&
+                          (
+                            <Button
+                              onClick={() => handleUnban(penalty.id)}
+                              size="sm"
+                              variant="outline"
+                              className="border-green-300 text-green-700 hover:bg-green-50"
+                            >
+                              <Check className="w-4 h-4 mr-1" />
+                              ยกเลิกระงับ
+                            </Button>
+                          )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
