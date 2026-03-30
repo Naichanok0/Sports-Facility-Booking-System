@@ -30,6 +30,14 @@ import {
 } from "recharts";
 
 export default function ReportsDashboard() {
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth <= 640);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
   const [dateFrom, setDateFrom] = useState<Date>(new Date(2026, 1, 1));
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [reportType, setReportType] = useState("daily");
@@ -56,22 +64,44 @@ export default function ReportsDashboard() {
           statisticsAPI.getFacilities(startDate, endDate),
         ]);
 
+        // bookingResponse.data expected shape: { total, completed, confirmed, cancelled, noShow, checkedIn, byDay: [{date, bookings, completed, noShow, cancelled}], byFacility: [...] }
         if (bookingResponse.success && bookingResponse.data) {
-          const bookingData = Array.isArray(bookingResponse.data) ? bookingResponse.data : [];
-          setBookingStats(bookingData);
+          const dataObj = bookingResponse.data as any;
+
+          const byDay = Array.isArray(dataObj.byDay) ? dataObj.byDay : [];
+
+          // Map to chart-friendly shape
+          const bookingChartData = byDay.map((d: any) => ({
+            date: format(new Date(d.date), "dd MMM", { locale: th }),
+            completed: d.completed || 0,
+            noShow: d.noShow || 0,
+            bookings: d.bookings || 0,
+          }));
+
+          setBookingStats(bookingChartData);
+
           setSummaryStats({
-            totalBookings: bookingData.length || 0,
-            completedBookings: bookingData.filter((b: any) => b.status === "completed").length || 0,
-            noShowCount: bookingData.filter((b: any) => b.status === "no-show").length || 0,
-            totalPlayers: bookingData.reduce((sum: number, b: any) => sum + (b.playerCount || 0), 0),
+            totalBookings: dataObj.total || 0,
+            completedBookings: dataObj.completed || 0,
+            noShowCount: dataObj.noShow || 0,
+            totalPlayers: byDay.reduce((sum: number, _d: any) => sum + 0, 0), // API doesn't provide totalPlayers here
           });
         } else {
           setBookingStats([]);
+          setSummaryStats({ totalBookings: 0, completedBookings: 0, noShowCount: 0, totalPlayers: 0 });
         }
 
+        // facilityResponse.data expected as an array of facility stats
         if (facilityResponse.success && facilityResponse.data) {
           const facilityData = Array.isArray(facilityResponse.data) ? facilityResponse.data : [];
-          setFacilityStats(facilityData);
+
+          // Normalize to { name, bookingCount }
+          const facilityChartData = facilityData.map((f: any) => ({
+            name: f.facilityName || f.name || f.facility,
+            bookingCount: f.totalBookings ?? f.bookings ?? f.bookingCount ?? 0,
+          }));
+
+          setFacilityStats(facilityChartData);
         } else {
           setFacilityStats([]);
         }
@@ -90,11 +120,11 @@ export default function ReportsDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
         <h2 className="text-2xl font-bold text-gray-800">รายงานสรุปการจอง</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <Select value={reportType} onValueChange={setReportType}>
-            <SelectTrigger className="w-[150px] border-teal-200 focus:border-teal-500">
+            <SelectTrigger className="w-full md:w-[150px] border-teal-200 focus:border-teal-500">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -108,11 +138,11 @@ export default function ReportsDashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
+        <Card className="p-4 md:p-5 border-2 border-teal-50 bg-gradient-to-br from-teal-50 to-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">การจองทั้งหมด</p>
-              <p className="text-3xl font-bold text-gray-800 mt-1">
+              <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">
                 {summaryStats.totalBookings}
               </p>
               <p className="text-xs text-teal-600 mt-1 flex items-center">
@@ -120,17 +150,17 @@ export default function ReportsDashboard() {
                 {bookingStats.length > 0 ? "+5%" : "ไม่มีข้อมูล"}
               </p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-500 rounded-full flex items-center justify-center">
-              <CalendarIcon className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-teal-500 to-blue-500 rounded-full flex items-center justify-center">
+              <CalendarIcon className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-5 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
+        <Card className="p-4 md:p-5 border-2 border-teal-50 bg-gradient-to-br from-green-50 to-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">ใช้งานสำเร็จ</p>
-              <p className="text-3xl font-bold text-gray-800 mt-1">
+              <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">
                 {summaryStats.completedBookings}
               </p>
               <p className="text-xs text-green-600 mt-1">
@@ -143,38 +173,38 @@ export default function ReportsDashboard() {
                   : "0%"}
               </p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
-              <Users className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
+              <Users className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-5 border-2 border-teal-50 bg-gradient-to-br from-orange-50 to-white">
+        <Card className="p-4 md:p-5 border-2 border-teal-50 bg-gradient-to-br from-orange-50 to-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">ไม่มาใช้งาน</p>
-              <p className="text-3xl font-bold text-gray-800 mt-1">
+              <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">
                 {summaryStats.noShowCount}
               </p>
               <p className="text-xs text-orange-600 mt-1">ครั้ง</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-yellow-500 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-orange-500 to-yellow-500 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-5 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
+        <Card className="p-4 md:p-5 border-2 border-teal-50 bg-gradient-to-br from-blue-50 to-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">จำนวนผู้เล่น</p>
-              <p className="text-3xl font-bold text-gray-800 mt-1">
+              <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">
                 {summaryStats.totalPlayers}
               </p>
               <p className="text-xs text-blue-600 mt-1">คนทั้งสิ้น</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
-              <Clock className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
+              <Clock className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
           </div>
         </Card>
@@ -182,16 +212,16 @@ export default function ReportsDashboard() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border-2 border-teal-50">
+        <Card className="p-4 md:p-6 border-2 border-teal-50">
           <h3 className="text-lg font-bold text-gray-800 mb-4">
             สถิติการจองรายวัน
           </h3>
           {loading ? (
-            <div className="flex items-center justify-center h-[300px]">
+            <div className={`flex items-center justify-center ${isMobile ? 'h-[220px]' : 'h-[300px]'}`}>
               <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
             </div>
           ) : bookingStats.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 300}>
               <BarChart data={bookingStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="date" stroke="#6b7280" />
@@ -209,30 +239,30 @@ export default function ReportsDashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className={`${isMobile ? 'h-[220px]' : 'h-[300px]'} flex items-center justify-center text-gray-500`}>
               ไม่มีข้อมูลในช่วงเวลาที่เลือก
             </div>
           )}
         </Card>
 
-        <Card className="p-6 border-2 border-teal-50">
+        <Card className="p-4 md:p-6 border-2 border-teal-50">
           <h3 className="text-lg font-bold text-gray-800 mb-4">
             สัดส่วนการจองแยกตามสนาม
           </h3>
           {loading ? (
-            <div className="flex items-center justify-center h-[300px]">
+            <div className={`flex items-center justify-center ${isMobile ? 'h-[220px]' : 'h-[300px]'}`}>
               <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
             </div>
-          ) : facilityStats.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+          ) : facilityStats && facilityStats.length > 0 ? (
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 300}>
               <PieChart>
                 <Pie
                   data={facilityStats}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) => `${name} ${value}`}
-                  outerRadius={80}
+                  label={({ name, value }: any) => `${name} ${value}`}
+                  outerRadius={isMobile ? 60 : 80}
                   fill="#8884d8"
                   dataKey="bookingCount"
                 >
@@ -244,7 +274,7 @@ export default function ReportsDashboard() {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className={`${isMobile ? 'h-[220px]' : 'h-[300px]'} flex items-center justify-center text-gray-500`}>
               ไม่มีข้อมูลในช่วงเวลาที่เลือก
             </div>
           )}
@@ -257,27 +287,27 @@ export default function ReportsDashboard() {
           ปีกอย่างการจองตามช่วงเวลา
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
+          <div className="p-3 md:p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">08:00 - 10:00</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
+            <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">
               {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "08:00").length : 0} ครั้ง
             </p>
           </div>
-          <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
+          <div className="p-3 md:p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">10:00 - 12:00</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
+            <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">
               {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "10:00").length : 0} ครั้ง
             </p>
           </div>
-          <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
+          <div className="p-3 md:p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">14:00 - 16:00</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
+            <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">
               {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "14:00").length : 0} ครั้ง
             </p>
           </div>
-          <div className="p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
+          <div className="p-3 md:p-4 bg-gradient-to-br from-teal-50 to-white rounded-lg">
             <p className="text-sm text-gray-600">16:00 - 18:00</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
+            <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">
               {Array.isArray(bookingStats) ? bookingStats.filter((b: any) => b.startTime === "16:00").length : 0} ครั้ง
             </p>
           </div>

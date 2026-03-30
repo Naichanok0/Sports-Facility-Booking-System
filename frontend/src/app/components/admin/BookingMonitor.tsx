@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { MobileTable } from "../ui/MobileTable";
-import { Search, Loader2, AlertCircle, CheckCircle, Trash2 } from "lucide-react";
+import { Search, Loader2, AlertCircle, CheckCircle, Trash2, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { reservationAPI, userAPI } from "../../../services/api";
 import { toast } from "sonner";
 
@@ -49,6 +49,7 @@ export default function BookingMonitor() {
   const [users, setUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -231,7 +232,44 @@ export default function BookingMonitor() {
     };
   }, []);
 
+  // Date helpers for day selection
+  const formatToInput = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const goPrevDay = () => {
+    setSelectedDate((prev) => {
+      const base = prev ? new Date(prev) : new Date();
+      base.setDate(base.getDate() - 1);
+      return base;
+    });
+  };
+
+  const goNextDay = () => {
+    setSelectedDate((prev) => {
+      const base = prev ? new Date(prev) : new Date();
+      base.setDate(base.getDate() + 1);
+      return base;
+    });
+  };
+
+  const goToday = () => setSelectedDate(new Date());
+
+  const clearSelectedDate = () => setSelectedDate(null);
+
   const filteredBookings = bookings.filter((booking) => {
+    // If a specific date is selected, only show bookings on that date
+    if (selectedDate) {
+      const bookingDate = new Date(booking.date);
+      const sameDay =
+        bookingDate.getFullYear() === selectedDate.getFullYear() &&
+        bookingDate.getMonth() === selectedDate.getMonth() &&
+        bookingDate.getDate() === selectedDate.getDate();
+      if (!sameDay) return false;
+    }
     const matchesSearch =
       booking.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.facilityName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -271,6 +309,23 @@ export default function BookingMonitor() {
       {!loading && (
         <Card className="p-4 border-2 border-teal-50">
           <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border rounded-md px-1 bg-white">
+                <button onClick={goPrevDay} title="ก่อนหน้า" className="p-2 text-gray-600 hover:text-gray-800"><ChevronLeft className="w-4 h-4"/></button>
+                <button onClick={goToday} title="วันนี้" className="px-3 py-2 text-sm text-teal-600 hover:bg-teal-50">วันนี้</button>
+                <button onClick={goNextDay} title="ถัดไป" className="p-2 text-gray-600 hover:text-gray-800"><ChevronRight className="w-4 h-4"/></button>
+                <button onClick={clearSelectedDate} title="แสดงทั้งหมด" className="ml-2 px-2 text-xs text-gray-500 hover:text-gray-700">ทั้งหมด</button>
+              </div>
+              <div className="flex items-center border rounded-md overflow-hidden bg-white">
+                <Calendar className="w-4 h-4 text-gray-500 ml-2" />
+                <input
+                  type="date"
+                  className="p-2 text-sm outline-none"
+                  value={selectedDate ? formatToInput(selectedDate) : ''}
+                  onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : null)}
+                />
+              </div>
+            </div>
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input

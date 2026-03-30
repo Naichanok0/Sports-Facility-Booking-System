@@ -38,9 +38,15 @@ router.get('/reservation/:reservationId', async (req, res) => {
       .sort({ position: 1 });
     
     if (!queues || queues.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No queue entries found for this reservation'
+      // Return an empty array (200) instead of 404 so clients can treat
+      // "no entries" as an empty list instead of an error. This prevents
+      // noisy 404 network errors in the frontend when a reservation has
+      // no standby queue entries yet.
+      return res.json({
+        success: true,
+        message: 'No queue entries found for this reservation',
+        data: [],
+        count: 0
       });
     }
     

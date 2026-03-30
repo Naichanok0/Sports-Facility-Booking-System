@@ -49,7 +49,8 @@ const reservationSchema = new mongoose.Schema({
     userId: String,
     firstName: String,
     lastName: String,
-    studentId: String
+    studentId: String,
+    barcode: String
   }],
   
   // Status Tracking
@@ -104,10 +105,9 @@ const reservationSchema = new mongoose.Schema({
   }
 }, { collection: 'reservations' });
 
-// Indexes for faster queries
+// Indexes for faster queries (note: unique: true fields already create indexes)
 reservationSchema.index({ userId: 1, date: -1 });
 reservationSchema.index({ facilityId: 1, date: 1, startTime: 1 });
 reservationSchema.index({ status: 1, createdAt: -1 });
-reservationSchema.index({ reservationNo: 1 });
 
 module.exports = mongoose.model('Reservation', reservationSchema);

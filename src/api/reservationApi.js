@@ -16,13 +16,44 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const skip = parseInt(req.query.skip) || 0;
     
-    const reservations = await Reservation.find()
+    let reservations = await Reservation.find()
       .populate('userId', 'firstName lastName studentId barcode')
       .populate('facilityId', 'name location')
       .populate('sportTypeId', 'name')
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip);
+    
+    // For each reservation, populate players with barcode from User collection
+    const User = require('../models/User');
+    reservations = await Promise.all(reservations.map(async (res) => {
+      const resObj = res.toObject();
+      
+      // Enrich players array with barcode from User collection
+      if (resObj.players && Array.isArray(resObj.players)) {
+        resObj.players = await Promise.all(resObj.players.map(async (player) => {
+          // If barcode is missing, try to fetch from User collection
+          if (!player.barcode && player.userId) {
+            try {
+              const user = await User.findById(player.userId).select('barcode studentId').lean();
+              return {
+                ...player,
+                barcode: player.barcode || user?.barcode || player.studentId,
+                studentId: player.studentId || user?.studentId
+              };
+            } catch (e) {
+              return {
+                ...player,
+                barcode: player.barcode || player.studentId
+              };
+            }
+          }
+          return player;
+        }));
+      }
+      
+      return resObj;
+    }));
     
     const total = await Reservation.countDocuments();
     
@@ -48,7 +79,7 @@ router.get('/', async (req, res) => {
 // ✅ GET reservation by ID
 router.get('/:id', async (req, res) => {
   try {
-    const reservation = await Reservation.findById(req.params.id)
+    let reservation = await Reservation.findById(req.params.id)
       .populate('userId', 'firstName lastName studentId barcode phone')
       .populate('facilityId', 'name location pricePerHour')
       .populate('sportTypeId', 'name description');
@@ -60,10 +91,34 @@ router.get('/:id', async (req, res) => {
       });
     }
     
+    // Enrich players array with barcode from User collection
+    const resObj = reservation.toObject();
+    if (resObj.players && Array.isArray(resObj.players)) {
+      const User = require('../models/User');
+      resObj.players = await Promise.all(resObj.players.map(async (player) => {
+        if (!player.barcode && player.userId) {
+          try {
+            const user = await User.findById(player.userId).select('barcode studentId').lean();
+            return {
+              ...player,
+              barcode: player.barcode || user?.barcode || player.studentId,
+              studentId: player.studentId || user?.studentId
+            };
+          } catch (e) {
+            return {
+              ...player,
+              barcode: player.barcode || player.studentId
+            };
+          }
+        }
+        return player;
+      }));
+    }
+    
     res.json({
       success: true,
       message: 'Reservation retrieved successfully',
-      data: reservation
+      data: resObj
     });
   } catch (error) {
     logger.error('Error fetching reservation:', error);

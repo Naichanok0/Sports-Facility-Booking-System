@@ -49,7 +49,10 @@ export async function apiCall<T>(
     }
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
+      // Return the parsed response body even for non-OK responses so callers
+      // can inspect error details (e.g., ban reason / bannedUntil) and
+      // render appropriate UI. Network/parse errors are still handled below.
+      return data;
     }
 
     return data;
@@ -165,6 +168,38 @@ export const reservationAPI = {
 };
 
 /**
+ * Waiting Room API Service
+ */
+export const waitingRoomAPI = {
+  create: (data: any) => apiCall('/waiting-rooms', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getAll: (query?: string) =>
+    apiCall(`/waiting-rooms${query ? '?' + query : ''}`),
+  getById: (idOrCode: string) =>
+    apiCall(`/waiting-rooms/${idOrCode}`),
+  join: (id: string, userId: string) =>
+    apiCall(`/waiting-rooms/${id}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ userId })
+    }),
+  leave: (id: string, userId: string) =>
+    apiCall(`/waiting-rooms/${id}/leave`, {
+      method: 'POST',
+      body: JSON.stringify({ userId })
+    }),
+  closeAndReserve: (id: string) =>
+    apiCall(`/waiting-rooms/${id}/close-and-reserve`, {
+      method: 'POST'
+    }),
+  cancel: (id: string) =>
+    apiCall(`/waiting-rooms/${id}/cancel`, {
+      method: 'POST'
+    })
+};
+
+/**
  * Queue API Service
  */
 export const queueAPI = {
@@ -205,6 +240,12 @@ export const checkinAPI = {
     apiCall(`/checkins/facility/${facilityId}/today`),
   getByReservation: (reservationId: string) =>
     apiCall(`/checkins/reservation/${reservationId}`)
+  ,
+  // Cancel (remove) a check-in for a specific user/reservation
+  cancel: (data: any) => apiCall('/checkins/cancel', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
 };
 
 /**
@@ -259,6 +300,7 @@ export default {
   sportTypeAPI,
   facilityAPI,
   reservationAPI,
+  waitingRoomAPI,
   queueAPI,
   checkinAPI,
   cancellationAPI

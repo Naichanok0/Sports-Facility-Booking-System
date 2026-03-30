@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "../ui/dialog";
 import { 
   Users, 
@@ -22,10 +23,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { User } from "../../App";
-import { reservationAPI } from "../../../services/api";
+import { reservationAPI, waitingRoomAPI } from "../../../services/api";
 
 interface Player {
-  id: string;
+  userId?: string;
+  id?: string;
   firstName: string;
   lastName: string;
   studentId: string;
@@ -63,7 +65,8 @@ export default function BookingWaitingRoom({
 }: BookingWaitingRoomProps) {
   const [players, setPlayers] = useState<Player[]>([
     {
-      id: "1",
+      userId: currentUser.id,
+      id: currentUser.id,
       firstName: currentUser.firstName,
       lastName: currentUser.lastName,
       studentId: currentUser.studentId,
@@ -79,6 +82,40 @@ export default function BookingWaitingRoom({
     lastName: "",
     studentId: "",
   });
+  const [roomId, setRoomId] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Initialize room on mount
+  useEffect(() => {
+    const initRoom = async () => {
+      try {
+        const response = await waitingRoomAPI.getById(bookingCode);
+        if (response.success && response.data) {
+          setRoomId((response.data as any)._id);
+          // Set players from room
+          const roomPlayers = (response.data as any).players || [];
+          if (roomPlayers.length > 0) {
+            setPlayers(roomPlayers);
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing room:", error);
+      }
+    };
+    initRoom();
+  }, [bookingCode]);
+
+  // If joining, auto-fill form with current user info
+  useEffect(() => {
+    if (isJoining) {
+      setJoinForm({
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
+        // Use barcode if available, otherwise studentId
+        studentId: currentUser.barcode || currentUser.studentId,
+      });
+    }
+  }, [isJoining, currentUser]);
 
   // Countdown timer
   useEffect(() => {
@@ -142,7 +179,7 @@ export default function BookingWaitingRoom({
     }
   };
 
-  const handleJoinSubmit = () => {
+  const handleJoinSubmit = async () => {
     if (!joinForm.firstName || !joinForm.lastName || !joinForm.studentId) {
       toast.error("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
@@ -159,69 +196,69 @@ export default function BookingWaitingRoom({
       return;
     }
 
-    const newPlayer: Player = {
-      id: Date.now().toString(),
-      firstName: joinForm.firstName,
-      lastName: joinForm.lastName,
-      studentId: joinForm.studentId,
-      joinedAt: new Date(),
-    };
-
-    setPlayers([...players, newPlayer]);
-    setShowJoinDialog(false);
-    setJoinForm({ firstName: "", lastName: "", studentId: "" });
-    toast.success(`เพิ่ม ${joinForm.firstName} ${joinForm.lastName} เข้าร่วมแล้ว!`);
+    try {
+      setIsSubmitting(true);
+      
+      // If joining (not creator), call join API
+      if (isJoining && roomId) {
+        const response = await waitingRoomAPI.join(roomId, currentUser.id);
+        
+        if (response.success && response.data) {
+          // Update players from response
+          const updatedPlayers = (response.data as any).players || [];
+          setPlayers(updatedPlayers);
+          toast.success(`เข้าร่วมการจองสำเร็จ!`);
+          setShowJoinDialog(false);
+        } else {
+          toast.error(response.message || "เกิดข้อผิดพลาดในการเข้าร่วม");
+        }
+      } else {
+        // Local adding (for demo/old logic)
+        const newPlayer: Player = {
+          userId: currentUser.id,
+          id: currentUser.id,
+          firstName: joinForm.firstName,
+          lastName: joinForm.lastName,
+          studentId: joinForm.studentId,
+          joinedAt: new Date(),
+        };
+        setPlayers([...players, newPlayer]);
+        toast.success(`เพิ่ม ${joinForm.firstName} ${joinForm.lastName} เข้าร่วมแล้ว!`);
+        setShowJoinDialog(false);
+      }
+      
+      setJoinForm({ firstName: "", lastName: "", studentId: "" });
+    } catch (error: any) {
+      console.error("Error joining:", error);
+      toast.error("เกิดข้อผิดพลาดในการเข้าร่วม");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleConfirmBooking = async () => {
+    if (!roomId) {
+      toast.error("ไม่พบรหัสห้องรอ");
+      return;
+    }
+
     try {
-      // Parse time slot
-      const timeParts = timeSlot.split(" - ");
-      const startTime = timeParts[0]?.trim();
-      const endTime = timeParts[1]?.trim();
+      setIsSubmitting(true);
 
-      if (!startTime || !endTime) {
-        throw new Error("Invalid time slot format");
-      }
-
-      // Create reservation data - only send required fields
-      const reservationData = {
-        userId: currentUser.id,
-        facilityId,
-        facilityName,      // Add facility name as fallback
-        sportTypeId,
-        sportTypeName,     // Add sport type name as fallback
-        date: date, // Keep as string, backend will parse it
-        startTime,
-        endTime,
-        playerCount: players.length,
-        notes: "",
-        // Additional metadata (optional)
-        bookingCode,
-        players: players.map(p => ({
-          userId: p.id,
-          firstName: p.firstName,
-          lastName: p.lastName,
-          studentId: p.studentId,
-        })),
-      };
-
-      console.log("Sending reservation data:", reservationData);
-
-      // Save to database
-      const response = await reservationAPI.create(reservationData);
+      // Call close-and-reserve endpoint
+      const response = await waitingRoomAPI.closeAndReserve(roomId);
       
-      console.log("API Response:", response);
-
-      if (!response.success) {
-        throw new Error(response.error || "Failed to save booking");
+      if (response.success) {
+        toast.success("ยืนยันการจองสำเร็จ! กรุณาเช็คอินก่อนเวลาเริ่มใช้งาน 10-15 นาที");
+        onComplete();
+      } else {
+        throw new Error(response.message || "Failed to close room and create reservation");
       }
-
-      toast.success("ยืนยันการจองสำเร็จ! กรุณาเช็คอินก่อนเวลาเริ่มใช้งาน 10-15 นาที");
-      onComplete();
     } catch (err: any) {
       console.error("Error confirming booking:", err);
       toast.error(err.message || "ไม่สามารถบันทึกการจองได้");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -346,7 +383,7 @@ export default function BookingWaitingRoom({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {players.map((player, index) => (
                 <div
-                  key={player.id}
+                  key={`player-${player.id || index}`}
                   className="flex items-center p-4 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border-2 border-teal-100 animate-in slide-in-from-bottom-4 duration-300"
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg mr-3 shrink-0">
@@ -372,17 +409,29 @@ export default function BookingWaitingRoom({
               {/* Empty Slots */}
               {Array.from({ length: requiredPlayers - players.length }).map((_, index) => (
                 <div
-                  key={`empty-${index}`}
-                  className="flex items-center p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
+                  key={`empty-slot-${players.length}-${index}`}
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border-2 border-dashed border-orange-300 hover:border-orange-400 transition-colors"
                 >
-                  <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 font-bold text-lg mr-3 shrink-0">
-                    {players.length + index + 1}
+                  <div className="flex items-center flex-1 min-w-0">
+                    <div className="w-12 h-12 bg-orange-200 rounded-full flex items-center justify-center text-orange-500 font-bold text-lg mr-3 shrink-0">
+                      {players.length + index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-orange-600">รอผู้เข้าร่วม</p>
+                      <p className="text-sm text-orange-500">กดปุ่มด้านข้าง</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-400">รอผู้เล่น...</p>
-                    <p className="text-sm text-gray-400">ยังไม่มีผู้เข้าร่วม</p>
-                  </div>
-                  <Users className="w-5 h-5 text-gray-300 shrink-0" />
+                  {isJoining ? (
+                    <Button
+                      onClick={() => setShowJoinDialog(true)}
+                      className="ml-2 shrink-0 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white whitespace-nowrap"
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      เข้าร่วม
+                    </Button>
+                  ) : (
+                    <Users className="w-5 h-5 text-orange-300 shrink-0 ml-2" />
+                  )}
                 </div>
               ))}
             </div>
@@ -413,6 +462,9 @@ export default function BookingWaitingRoom({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>เข้าร่วมการจอง</DialogTitle>
+            <DialogDescription className="hidden">
+              เพิ่มผู้เล่นเข้าร่วมการจองสนาม
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
@@ -433,6 +485,7 @@ export default function BookingWaitingRoom({
                   onChange={(e) =>
                     setJoinForm({ ...joinForm, firstName: e.target.value })
                   }
+                  disabled={isJoining}
                   className="mt-1 border-teal-200 focus:border-teal-500"
                 />
               </div>
@@ -445,6 +498,7 @@ export default function BookingWaitingRoom({
                   onChange={(e) =>
                     setJoinForm({ ...joinForm, lastName: e.target.value })
                   }
+                  disabled={isJoining}
                   className="mt-1 border-teal-200 focus:border-teal-500"
                 />
               </div>
@@ -457,6 +511,7 @@ export default function BookingWaitingRoom({
                   onChange={(e) =>
                     setJoinForm({ ...joinForm, studentId: e.target.value })
                   }
+                  disabled={isJoining}
                   maxLength={14}
                   className="mt-1 border-teal-200 focus:border-teal-500"
                 />
@@ -487,6 +542,9 @@ export default function BookingWaitingRoom({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>ครบจำนวนแล้ว! ยืนยันการจอง</DialogTitle>
+            <DialogDescription className="hidden">
+              ยืนยันการจองเมื่อครบจำนวนผู้เล่น
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg">
@@ -513,10 +571,11 @@ export default function BookingWaitingRoom({
 
             <Button
               onClick={handleConfirmBooking}
+              disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              ยืนยันการจอง
+              {isSubmitting ? "กำลังยืนยัน..." : "ยืนยันการจอง"}
             </Button>
           </div>
         </DialogContent>

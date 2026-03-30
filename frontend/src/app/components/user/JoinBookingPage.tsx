@@ -7,7 +7,7 @@ import { UserPlus, ArrowLeft, Search, Loader2, AlertCircle, CheckCircle2, KeyRou
 import { toast } from "sonner";
 import { User } from "../../App";
 import BookingWaitingRoom from "./BookingWaitingRoom";
-import { reservationAPI } from "../../../services/api";
+import { waitingRoomAPI } from "../../../services/api";
 
 interface JoinBookingPageProps {
   user: User;
@@ -21,15 +21,33 @@ interface JoinBookingPageProps {
 
 interface AvailableBooking {
   _id: string;
-  facilityName: string;
-  sportTypeName: string;
+  roomCode: string;
+  facilityId: {
+    _id: string;
+    name: string;
+    location: string;
+  };
+  sportTypeId: {
+    _id: string;
+    name: string;
+  };
+  host: {
+    firstName: string;
+    lastName: string;
+    studentId: string;
+  };
   date: string;
   startTime: string;
   endTime: string;
-  requiredPlayers: number;
-  currentPlayers: number;
-  availableSlots: number;
-  createdBy: string;
+  maxPlayers: number;
+  players: Array<{
+    userId: string;
+    firstName: string;
+    lastName: string;
+    studentId: string;
+  }>;
+  status: string;
+  expiresAt: string;
 }
 
 export default function JoinBookingPage({
@@ -50,26 +68,26 @@ export default function JoinBookingPage({
   const [step, setStep] = useState<"list" | "info" | "waiting">("list");
   const [selectedBooking, setSelectedBooking] = useState<AvailableBooking | null>(null);
 
-  // Fetch available bookings on mount
+  // Fetch available waiting rooms on mount
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await reservationAPI.getAvailable();
+        const response = await waitingRoomAPI.getAll("status=open&limit=50");
         if (!response.success || !Array.isArray(response.data)) {
-          throw new Error(response.error || "Failed to fetch available bookings");
+          throw new Error(response.error || "Failed to fetch available rooms");
         }
 
         setBookings(response.data);
 
         if (response.data.length === 0) {
-          toast.info("ยังไม่มีการจองที่รอผู้เข้าร่วม");
+          toast.info("ยังไม่มีห้องรอที่สามารถเข้าร่วมได้");
         }
       } catch (err: any) {
         console.error("Error fetching bookings:", err);
-        const errorMsg = err.message || "Failed to load available bookings";
+        const errorMsg = err.message || "Failed to load available rooms";
         setError(errorMsg);
         toast.error(errorMsg);
       } finally {
@@ -78,6 +96,9 @@ export default function JoinBookingPage({
     };
 
     fetchBookings();
+    // Refresh every 5 seconds
+    const interval = setInterval(fetchBookings, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSelectBooking = (booking: AvailableBooking) => {
@@ -130,16 +151,19 @@ export default function JoinBookingPage({
 
     try {
       setSearchingCode(true);
-      // Try to find booking by code from the available bookings
-      // In real app, you'd make an API call to search by code
-      const foundBooking = bookings.find(b => 
-        b._id.toLowerCase().includes(bookingCode.toLowerCase())
-      );
-
-      if (foundBooking) {
-        handleSelectBooking(foundBooking);
+      // Search by room code from API
+      const response = await waitingRoomAPI.getById(bookingCode.trim());
+      
+      if (response.success && response.data) {
+        const room = response.data as AvailableBooking;
+        // Only allow joining open rooms
+        if (room.status !== 'open') {
+          toast.error(`ห้องนี้ปิดแล้ว (สถานะ: ${room.status})`);
+          return;
+        }
+        handleSelectBooking(room);
         setBookingCode("");
-        toast.success("พบการจองแล้ว!");
+        toast.success("พบห้องแล้ว!");
       } else {
         toast.error("ไม่พบรหัสห้องดังกล่าว");
       }
@@ -167,19 +191,20 @@ export default function JoinBookingPage({
   if (step === "waiting" && selectedBooking) {
     return (
       <BookingWaitingRoom
-        bookingCode={selectedBooking._id}
-        facilityId={selectedBooking._id || ""}
-        facilityName={selectedBooking.facilityName}
-        sportTypeId={selectedBooking._id || ""}
-        sportTypeName={selectedBooking.sportTypeName}
+        bookingCode={selectedBooking.roomCode}
+        facilityId={selectedBooking.facilityId._id}
+        facilityName={selectedBooking.facilityId.name}
+        sportTypeId={selectedBooking.sportTypeId._id}
+        sportTypeName={selectedBooking.sportTypeId.name}
         date={selectedBooking.date}
         timeSlot={`${selectedBooking.startTime} - ${selectedBooking.endTime}`}
-        requiredPlayers={selectedBooking.requiredPlayers}
+        requiredPlayers={selectedBooking.maxPlayers}
         currentUser={{
           ...user,
           firstName: playerInfo.firstName,
           lastName: playerInfo.lastName,
           studentId: playerInfo.studentId,
+          barcode: user.barcode, // Ensure barcode is passed
         }}
         onComplete={handleWaitingRoomComplete}
         onExpired={handleWaitingRoomExpired}
@@ -286,46 +311,51 @@ export default function JoinBookingPage({
               </Card>
             ) : (
               <div className="space-y-3">
-                {bookings.map((booking) => (
-                  <Card
-                    key={booking._id}
-                    className="p-4 border-2 border-teal-100 hover:border-teal-400 hover:shadow-md cursor-pointer transition-all"
-                    onClick={() => handleSelectBooking(booking)}
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-gray-800 truncate">
-                            {booking.facilityName}
-                          </h4>
-                          {booking.availableSlots <= 1 && (
-                            <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded-full whitespace-nowrap">
-                              เหลือน้อย
-                            </span>
-                          )}
+                {bookings.map((booking) => {
+                  const currentPlayers = booking.players?.length || 0;
+                  const availableSlots = Math.max(0, booking.maxPlayers - currentPlayers);
+                  
+                  return (
+                    <Card
+                      key={booking._id}
+                      className="p-4 border-2 border-teal-100 hover:border-teal-400 hover:shadow-md cursor-pointer transition-all"
+                      onClick={() => handleSelectBooking(booking)}
+                    >
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-gray-800 truncate">
+                              {booking.facilityId.name}
+                            </h4>
+                            {availableSlots <= 1 && (
+                              <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded-full whitespace-nowrap">
+                                เหลือน้อย
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {booking.sportTypeId.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            📅 {booking.date}
+                          </p>
+                          <p className="text-sm font-semibold text-teal-600 mt-1">
+                            🕐 {booking.startTime} - {booking.endTime}
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {booking.sportTypeName}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          📅 {booking.date}
-                        </p>
-                        <p className="text-sm font-semibold text-teal-600 mt-1">
-                          🕐 {booking.startTime} - {booking.endTime}
-                        </p>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-3xl font-bold text-teal-600">
+                            {availableSlots}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">ที่ว่าง</p>
+                          <p className="text-xs text-gray-500 mt-2">
+                            👥 {currentPlayers}/{booking.maxPlayers}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-3xl font-bold text-teal-600">
-                          {booking.availableSlots}
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">ที่ว่าง</p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          👥 {booking.currentPlayers}/{booking.requiredPlayers}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </>
@@ -340,7 +370,7 @@ export default function JoinBookingPage({
                 ยืนยันข้อมูลของคุณ
               </h3>
               <p className="text-sm text-gray-600 mt-2">
-                {selectedBooking?.facilityName}
+                {selectedBooking?.facilityId.name}
               </p>
               <p className="text-xs text-gray-500">
                 {selectedBooking?.startTime} - {selectedBooking?.endTime}
@@ -412,10 +442,10 @@ export default function JoinBookingPage({
               </p>
               <div className="text-sm text-gray-700 space-y-1">
                 <p>
-                  <strong>สถานที่:</strong> {selectedBooking?.facilityName}
+                  <strong>สถานที่:</strong> {selectedBooking?.facilityId.name}
                 </p>
                 <p>
-                  <strong>กีฬา:</strong> {selectedBooking?.sportTypeName}
+                  <strong>กีฬา:</strong> {selectedBooking?.sportTypeId.name}
                 </p>
                 <p>
                   <strong>วันที่:</strong> {selectedBooking?.date}
@@ -425,7 +455,7 @@ export default function JoinBookingPage({
                   {selectedBooking?.endTime}
                 </p>
                 <p>
-                  <strong>จำนวนผู้เล่น:</strong> {selectedBooking?.requiredPlayers}{" "}
+                  <strong>จำนวนผู้เล่น:</strong> {selectedBooking?.maxPlayers}{" "}
                   คน
                 </p>
               </div>

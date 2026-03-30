@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import BookingWaitingRoom from "./BookingWaitingRoom";
-import { facilityAPI, sportTypeAPI, reservationAPI } from "../../../services/api";
+import { facilityAPI, sportTypeAPI, reservationAPI, waitingRoomAPI } from "../../../services/api";
 
 interface Facility {
   _id?: string;
@@ -179,30 +179,48 @@ export default function BookingPage({ user }: BookingPageProps) {
     setShowConfirmDialog(true);
   };
 
-  const confirmBooking = () => {
-    if (!selectedFacilityData) return;
+  const confirmBooking = async () => {
+    if (!selectedFacilityData || !selectedTimeSlot) return;
     
-    // Generate booking code
-    const bookingCode = `BK${Date.now().toString().slice(-6)}`;
-    
-    // Find sport type name
-    const sportType = sportTypes.find(
-      (s) => (s._id || s.id) === selectedFacilityData.sportTypeId
-    );
-    
-    setActiveBooking({
-      bookingCode,
-      facilityId: selectedFacilityData._id || selectedFacilityData.id || "",
-      facilityName: selectedFacilityData.name,
-      sportTypeId: selectedFacilityData.sportTypeId || "",
-      sportTypeName: sportType?.name || "ไม่ระบุ",
-      date: format(selectedDate, "yyyy-MM-dd"), // Use ISO format for backend
-      timeSlot: `${selectedTimeSlot!.start} - ${selectedTimeSlot!.end}`,
-      requiredPlayers: selectedFacilityData.capacity || 0,
-    });
+    try {
+      // Find sport type name
+      const sportType = sportTypes.find(
+        (s) => (s._id || s.id) === selectedFacilityData.sportTypeId
+      );
+      
+      // Create waiting room via API
+      const response = await waitingRoomAPI.create({
+        host: user.id,
+        facilityId: selectedFacilityData._id || selectedFacilityData.id,
+        sportTypeId: selectedFacilityData.sportTypeId,
+        date: format(selectedDate, "yyyy-MM-dd"),
+        startTime: selectedTimeSlot.start,
+        endTime: selectedTimeSlot.end,
+        maxPlayers: selectedFacilityData.capacity || 6,
+        name: `${selectedFacilityData.name} - ${format(selectedDate, "d MMM", { locale: th })}`,
+      });
 
-    setShowConfirmDialog(false);
-    toast.success("สร้างการจองสำเร็จ! กรุณาแชร์รหัสจองให้เพื่อนๆ เข้าร่วม");
+      if (response.success && response.data) {
+        const roomCode = (response.data as any).roomCode || '';
+        setActiveBooking({
+          bookingCode: roomCode,
+          facilityId: (response.data as any).facilityId,
+          facilityName: selectedFacilityData.name,
+          sportTypeId: (response.data as any).sportTypeId,
+          sportTypeName: sportType?.name || "ไม่ระบุ",
+          date: format(selectedDate, "yyyy-MM-dd"),
+          timeSlot: `${selectedTimeSlot.start} - ${selectedTimeSlot.end}`,
+          requiredPlayers: selectedFacilityData.capacity || 0,
+        });
+        setShowConfirmDialog(false);
+        toast.success(`สร้างการจองสำเร็จ! รหัสจอง: ${roomCode}`);
+      } else {
+        toast.error(response.message || "ไม่สามารถสร้างการจองได้");
+      }
+    } catch (error: any) {
+      console.error("Error creating waiting room:", error);
+      toast.error("เกิดข้อผิดพลาดในการสร้างการจอง");
+    }
   };
 
   const handleBookingComplete = () => {

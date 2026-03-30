@@ -261,7 +261,14 @@ router.post('/login', async (req, res) => {
     if (user.isBanned && user.bannedUntil && new Date(user.bannedUntil) > new Date()) {
       return res.status(403).json({
         success: false,
-        message: `Account banned until ${user.bannedUntil}`
+        message: `Account banned until ${user.bannedUntil}`,
+        data: {
+          banReason: user.banReason || null,
+          bannedUntil: user.bannedUntil,
+          firstName: user.firstName || null,
+          lastName: user.lastName || null,
+          studentId: user.studentId || null
+        }
       });
     }
 

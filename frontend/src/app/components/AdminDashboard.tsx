@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { User, SportType, Facility, Booking } from "../App";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Button } from "./ui/button";
-import { LogOut, Settings, BarChart3, CalendarDays, ShieldAlert, Users } from "lucide-react";
+import { Settings, BarChart3, CalendarDays, CalendarCheck, ShieldAlert, Users } from "lucide-react";
 import { MobileNav } from "./ui/MobileNav";
 import { MobileTabs } from "./ui/MobileTabs";
 import FacilityManagement from "./admin/FacilityManagement";
@@ -18,7 +17,13 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState("facilities");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      return localStorage.getItem("adminActiveTab") || "facilities";
+    } catch (e) {
+      return "facilities";
+    }
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -41,13 +46,20 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             tabs={[
               { value: "facilities", label: "จัดการสนาม", icon: <Settings className="w-4 h-4" /> },
               { value: "sports", label: "ชนิดกีฬา", icon: <CalendarDays className="w-4 h-4" /> },
-              { value: "bookings", label: "ตรวจสอบการจอง", icon: <CalendarDays className="w-4 h-4" /> },
+              { value: "bookings", label: "ตรวจสอบการจอง", icon: <CalendarCheck className="w-4 h-4" /> },
               { value: "users", label: "จัดการผู้ใช้", icon: <Users className="w-4 h-4" /> },
               { value: "penalties", label: "บทลงโทษ", icon: <ShieldAlert className="w-4 h-4" /> },
               { value: "reports", label: "รายงาน", icon: <BarChart3 className="w-4 h-4" /> },
             ]}
             value={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={(val: string) => {
+              setActiveTab(val);
+              try {
+                localStorage.setItem("adminActiveTab", val);
+              } catch (e) {
+                // ignore storage errors (e.g., SSR or privacy settings)
+              }
+            }}
           >
             {activeTab === "facilities" && <FacilityManagement />}
             {activeTab === "sports" && <SportTypeManagement />}

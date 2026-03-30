@@ -108,6 +108,38 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       // Try API login first (for registered users)
       const loginResult = await userAPI.login(studentId, password);
       
+      // If the API indicates the account is banned, show ban dialog.
+      // The backend may return a 403 with either a message or a data object
+      // containing bannedUntil and banReason. We handle both shapes.
+      if (loginResult && loginResult.success === false) {
+        const maybeData: any = loginResult.data || {};
+
+        // If server returned explicit ban info in data, use it.
+        if (maybeData.bannedUntil || /banned/i.test(loginResult.message || '')) {
+          let bannedUntilDate: Date | null = null;
+          let reasonText = maybeData.banReason || '';
+
+          if (maybeData.bannedUntil) {
+            bannedUntilDate = new Date(maybeData.bannedUntil);
+          } else {
+            // Try to parse date from message like: "Account banned until 2026-03-27T00:00:00.000Z"
+            const match = (loginResult.message || '').match(/until\s+(.*)$/i);
+            if (match && match[1]) {
+              const parsed = new Date(match[1].trim());
+              if (!isNaN(parsed.getTime())) bannedUntilDate = parsed;
+            }
+          }
+
+          setBanInfo({
+            reason: reasonText || loginResult.message || 'ระงับสิทธิ์โดยผู้ดูแลระบบ',
+            bannedUntil: bannedUntilDate || new Date(),
+            userName: maybeData.firstName && maybeData.lastName ? `${maybeData.firstName} ${maybeData.lastName}` : studentId,
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
       if (loginResult.success && loginResult.data) {
         // Successful API login
         const userData = loginResult.data as any;
@@ -132,7 +164,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         return;
       }
 
-      // Fallback to demo accounts for testing
+  // Fallback to demo accounts for testing
       const user = DEMO_ACCOUNTS.find((u) => u.studentId === studentId);
       
       if (!user) {
@@ -280,14 +312,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             สมัครสมาชิก
           </Button>
 
-          <div className="pt-4 border-t border-gray-200 mt-6">
-            <p className="text-sm text-gray-600 mb-2">บัญชีทดสอบ:</p>
-            <div className="space-y-1 text-xs text-gray-500">
-              <p>• Admin: 6612345678 / admin123</p>
-              <p>• User: 6698765432 / user123</p>
-              <p>• ผู้ดูแลสนาม: 6655554444 / staff123</p>
-            </div>
-          </div>
+          
+            
+         
         </div>
       </Card>
 

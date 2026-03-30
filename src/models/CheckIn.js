@@ -22,17 +22,28 @@ const checkInSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  checkOutTime: Date,
   method: {
     type: String,
     enum: ['barcode', 'manual', 'qr-code'],
-    required: true
+    default: 'manual'
   },
   
-  // Who checked in the user
+  // Who checked in the user (staff performing the action)
   checkedInBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
+  },
+  staffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  
+  // Status of the check-in
+  status: {
+    type: String,
+    enum: ['checked-in', 'checked-out'],
+    default: 'checked-in'
   },
   
   // Additional Info
@@ -40,6 +51,10 @@ const checkInSchema = new mongoose.Schema({
   
   // Timestamps
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }

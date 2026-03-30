@@ -25,7 +25,7 @@ import {
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
 import { th } from "date-fns/locale";
-import { reservationAPI } from "../../../services/api";
+import { reservationAPI, checkinAPI } from "../../../services/api";
 
 interface Player {
   id: string;
@@ -40,6 +40,7 @@ interface Booking {
   id: string;
   bookingCode: string;
   facilityName: string;
+  facilityId?: string;
   sportTypeName: string;
   date: Date;
   timeSlot: string;
@@ -141,7 +142,7 @@ export default function CheckInManagement() {
                 id: p._id || `player-${idx}`,
                 firstName: p.firstName || "Unknown",
                 lastName: p.lastName || "User",
-                studentId: p.studentId || p.barcode || "",
+                studentId: (p.barcode || p.studentId || "").toString().trim(),
                 checkedIn: false,
                 checkedInAt: undefined,
               }));
@@ -151,17 +152,29 @@ export default function CheckInManagement() {
                   id: res.userId?._id || res.userId,
                   firstName: res.userId?.firstName || "Unknown",
                   lastName: res.userId?.lastName || "User",
-                  studentId: res.userId?.studentId || res.userId?.barcode || "",
+                  studentId: (res.userId?.barcode || res.userId?.studentId || "").toString().trim(),
                   checkedIn: false,
                   checkedInAt: undefined,
                 }
               ];
+            }
+
+            // If reservation status is 'completed', mark players as checked in so list view reflects server state.
+            // Do NOT mark all players as checked-in when status is only 'checked-in' (partial) because
+            // we don't have per-player check-in data here and that would incorrectly show 100%.
+            if (res.status === 'completed') {
+              playersList = playersList.map((p) => ({
+                ...p,
+                checkedIn: true,
+                checkedInAt: res.completedAt || res.updatedAt || new Date()
+              }));
             }
             
             return {
               id: res._id,
               bookingCode: res.reservationNo || res._id.substring(0, 8),
               facilityName: res.facilityId?.name || "Unknown Facility",
+              facilityId: res.facilityId?._id || res.facilityId,
               sportTypeName: res.sportTypeId?.name || "Unknown Sport",
               date: resDate,
               timeSlot: timeSlot,
@@ -205,15 +218,27 @@ export default function CheckInManagement() {
   const day2Bookings = getBookingsForDate(tomorrow);
   const day3Bookings = getBookingsForDate(dayAfterTomorrow);
 
-  const handleScan = (studentId: string) => {
+  const handleScan = async (studentId: string) => {
     if (!selectedBooking) return;
 
+    // Trim and normalize the barcode
+    const normalizedBarcode = studentId.trim();
+    console.log(`🔍 Scanning barcode: "${normalizedBarcode}" (length: ${normalizedBarcode.length})`);
+    
+    // Debug: log all players and their studentIds
+    console.log("📋 Available players:", selectedBooking.players.map(p => ({
+      name: `${p.firstName} ${p.lastName}`,
+      studentId: p.studentId,
+      id: p.id
+    })));
+
     const playerIndex = selectedBooking.players.findIndex(
-      (p) => p.studentId === studentId
+      (p) => p.studentId?.trim() === normalizedBarcode
     );
 
     if (playerIndex === -1) {
-      toast.error("ไม่พบรหัสนิสิตนี้ในรายการจอง");
+      console.error(`❌ Barcode not found: ${normalizedBarcode}`);
+      toast.error(`ไม่พบรหัสนิสิต: ${normalizedBarcode}`);
       return;
     }
 
@@ -222,7 +247,7 @@ export default function CheckInManagement() {
       return;
     }
 
-    // Update check-in status
+    // Optimistic UI update: mark player checked in
     const updatedBookings = allBookings.map((booking) => {
       if (booking.id === selectedBooking.id) {
         const updatedPlayers = [...booking.players];
@@ -236,18 +261,65 @@ export default function CheckInManagement() {
       return booking;
     });
 
-    setAllBookings(updatedBookings);
+    // compute new status based on checked-in count
+    const thisBooking = updatedBookings.find((b) => b.id === selectedBooking.id)!;
+    const checkedInCount = thisBooking.players.filter((p) => p.checkedIn).length;
+    const newStatus: Booking["status"] =
+      checkedInCount >= thisBooking.requiredPlayers ? "completed" : "in-progress";
+
+    const finalBookings = updatedBookings.map((b) =>
+      b.id === thisBooking.id ? { ...b, status: newStatus } : b
+    );
+
+    // Apply optimistic update
+    setAllBookings(finalBookings);
     setSelectedBooking({
       ...selectedBooking,
-      players: updatedBookings.find((b) => b.id === selectedBooking.id)!.players,
+      players: thisBooking.players,
+      status: newStatus,
     });
     setScanInput("");
-    toast.success(
-      `เช็คอินสำเร็จ: ${selectedBooking.players[playerIndex].firstName} ${selectedBooking.players[playerIndex].lastName}`
-    );
+
+    const player = thisBooking.players[playerIndex];
+    toast.success(`เช็คอินสำเร็จ: ${player.firstName} ${player.lastName}`);
+
+    // Persist to server: create a check-in record for this player and update reservation status
+    try {
+      const resId = thisBooking.reservationId || thisBooking.id;
+
+      // Call checkin API for the individual player
+      try {
+        const checkinResp = await checkinAPI.checkin({
+          reservationId: resId,
+          userId: player.id,
+          facilityId: thisBooking.facilityId,
+          method: 'manual',
+          staffId: localStorage.getItem('userId') || localStorage.getItem('staffId') || undefined,
+        });
+
+        if (!checkinResp || !checkinResp.success) {
+          console.warn("Checkin API returned failure", checkinResp);
+          // continue to try update reservation status below
+        }
+      } catch (e) {
+        console.warn("checkinAPI.checkin failed:", e);
+      }
+
+      // Map frontend status to server status: in-progress -> checked-in
+      const serverStatus = newStatus === "in-progress" ? "checked-in" : newStatus;
+      if (serverStatus) {
+        const upd = await reservationAPI.update(resId, { status: serverStatus });
+        if (!upd || !upd.success) {
+          console.warn("Failed to update reservation status", upd);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to persist check-in:", err);
+      toast.error("ไม่สามารถบันทึกสถานะไปยังเซิร์ฟเวอร์ได้");
+    }
   };
 
-  const handleManualCheckIn = (playerId: string) => {
+  const handleManualCheckIn = async (playerId: string) => {
     if (!selectedBooking) return;
 
     const playerIndex = selectedBooking.players.findIndex(
@@ -256,32 +328,86 @@ export default function CheckInManagement() {
 
     if (playerIndex === -1) return;
 
+    // Optimistic toggle
     const updatedBookings = allBookings.map((booking) => {
       if (booking.id === selectedBooking.id) {
         const updatedPlayers = [...booking.players];
+        const toggled = !updatedPlayers[playerIndex].checkedIn;
         updatedPlayers[playerIndex] = {
           ...updatedPlayers[playerIndex],
-          checkedIn: !updatedPlayers[playerIndex].checkedIn,
-          checkedInAt: updatedPlayers[playerIndex].checkedIn
-            ? undefined
-            : new Date(),
+          checkedIn: toggled,
+          checkedInAt: toggled ? new Date() : undefined,
         };
         return { ...booking, players: updatedPlayers };
       }
       return booking;
     });
 
-    setAllBookings(updatedBookings);
+    const thisBooking = updatedBookings.find((b) => b.id === selectedBooking.id)!;
+    const checkedInCount = thisBooking.players.filter((p) => p.checkedIn).length;
+    const newStatus: Booking["status"] =
+      checkedInCount >= thisBooking.requiredPlayers ? "completed" : "in-progress";
+
+    const finalBookings = updatedBookings.map((b) =>
+      b.id === thisBooking.id ? { ...b, status: newStatus } : b
+    );
+
+    setAllBookings(finalBookings);
     setSelectedBooking({
       ...selectedBooking,
-      players: updatedBookings.find((b) => b.id === selectedBooking.id)!.players,
+      players: thisBooking.players,
+      status: newStatus,
     });
-    
-    const player = selectedBooking.players[playerIndex];
-    if (!player.checkedIn) {
+
+    const player = thisBooking.players[playerIndex];
+    if (player.checkedIn) {
       toast.success(`เช็คอินสำเร็จ: ${player.firstName} ${player.lastName}`);
     } else {
       toast.info(`ยกเลิกเช็คอิน: ${player.firstName} ${player.lastName}`);
+    }
+
+    // Persist to server for manual check-in
+    try {
+      const resId = thisBooking.reservationId || thisBooking.id;
+
+      // If player was checked in, create a checkin record; if unchecking, cancel it via API
+      try {
+        if (player.checkedIn) {
+          const checkinResp = await checkinAPI.checkin({
+            reservationId: resId,
+            userId: player.id,
+            facilityId: thisBooking.facilityId,
+            method: 'manual',
+            staffId: localStorage.getItem('userId') || localStorage.getItem('staffId') || undefined,
+          });
+
+          if (!checkinResp || !checkinResp.success) {
+            console.warn('checkinAPI.checkin returned failure', checkinResp);
+          }
+
+          // also update reservation status to 'checked-in' (server may already do this)
+          const serverStatus = newStatus === 'in-progress' ? 'checked-in' : newStatus;
+          if (serverStatus) {
+            const upd = await reservationAPI.update(resId, { status: serverStatus });
+            if (!upd || !upd.success) {
+              console.warn('Failed to update reservation status', upd);
+            }
+          }
+        } else {
+          // Uncheck --> call cancel endpoint to remove check-in record and let backend adjust reservation status
+          const cancelResp = await checkinAPI.cancel({ reservationId: resId, userId: player.id });
+          if (!cancelResp || !cancelResp.success) {
+            console.warn('checkinAPI.cancel returned failure', cancelResp);
+            // inform user
+            toast.error('ไม่สามารถยกเลิกการเช็คอินที่เซิร์ฟเวอร์ได้');
+          }
+        }
+      } catch (e) {
+        console.warn('checkinAPI operation failed:', e);
+      }
+    } catch (err: any) {
+      console.error("Failed to persist manual check-in:", err);
+      toast.error("ไม่สามารถบันทึกสถานะไปยังเซิร์ฟเวอร์ได้");
     }
   };
 
@@ -547,8 +673,8 @@ export default function CheckInManagement() {
               value={scanInput}
               onChange={(e) => setScanInput(e.target.value)}
               onKeyPress={(e) => {
-                if (e.key === "Enter" && scanInput.length === 14) {
-                  handleScan(scanInput);
+                if (e.key === "Enter" && (e.target as HTMLInputElement).value.length === 14) {
+                  handleScan((e.target as HTMLInputElement).value);
                 }
               }}
               maxLength={14}

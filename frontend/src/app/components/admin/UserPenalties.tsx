@@ -356,7 +356,55 @@ export default function UserPenalties() {
 
       {!loading && (
         <Card className="p-4 border-2 border-teal-50">
-          <div className="overflow-x-auto">
+          {/* Mobile list: stack cards */}
+          <div className="md:hidden space-y-3">
+            {penalties.length === 0 ? (
+              <div className="text-center text-gray-500">ไม่มีรายการบทลงโทษ</div>
+            ) : (
+              penalties.map((penalty) => (
+                <div key={penalty.id} className="p-3 bg-white rounded-lg shadow-sm border border-teal-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500">บาร์โค้ด</p>
+                      <p className="font-mono text-sm text-gray-800 truncate">{penalty.barcode}</p>
+
+                      <p className="text-xs text-gray-500 mt-2">ชื่อ-นามสกุล</p>
+                      <p className="font-medium text-sm text-gray-800 truncate">{penalty.userName}</p>
+
+                      <p className="text-xs text-gray-500 mt-2">เหตุผล</p>
+                      <p className="text-sm text-gray-700 truncate">{penalty.reason}</p>
+
+                      <p className="text-xs text-gray-500 mt-2">ระงับถึงวันที่</p>
+                      <p className="text-sm text-gray-700">{format(penalty.bannedUntil, "d MMM yyyy", { locale: th })}</p>
+                    </div>
+
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                      <div>
+                        {!penalty.isActive ? (
+                          <Badge className="bg-gray-500 hover:bg-gray-600">ยกเลิกแล้ว</Badge>
+                        ) : isExpired(penalty.bannedUntil) ? (
+                          <Badge className="bg-green-500 hover:bg-green-600">หมดอายุ</Badge>
+                        ) : (
+                          <Badge className="bg-red-500 hover:bg-red-600">กำลังระงับ</Badge>
+                        )}
+                      </div>
+                      <div>
+                        {penalty.isActive && (
+                          <Button onClick={() => handleUnban(penalty.id)} size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-50">
+                            <Check className="w-4 h-4 mr-1" />
+                            ยกเลิก
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-teal-50 to-blue-50">
@@ -371,53 +419,30 @@ export default function UserPenalties() {
               <TableBody>
                 {penalties.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500">
-                      ไม่มีรายการบทลงโทษ
-                    </TableCell>
+                    <TableCell colSpan={6} className="text-center text-gray-500">ไม่มีรายการบทลงโทษ</TableCell>
                   </TableRow>
                 ) : (
                   penalties.map((penalty) => (
                     <TableRow key={penalty.id} className="hover:bg-teal-50/50">
-                      <TableCell className="font-mono">
-                        {penalty.barcode}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {penalty.userName}
-                      </TableCell>
-                      <TableCell>{penalty.reason}</TableCell>
-                      <TableCell>
-                        {format(penalty.bannedUntil, "d MMM yyyy", {
-                          locale: th,
-                        })}
-                      </TableCell>
+                      <TableCell className="font-mono truncate max-w-[120px]">{penalty.barcode}</TableCell>
+                      <TableCell className="font-medium truncate max-w-[160px]">{penalty.userName}</TableCell>
+                      <TableCell className="truncate max-w-[240px]">{penalty.reason}</TableCell>
+                      <TableCell>{format(penalty.bannedUntil, "d MMM yyyy", { locale: th })}</TableCell>
                       <TableCell>
                         {!penalty.isActive ? (
-                          <Badge className="bg-gray-500 hover:bg-gray-600">
-                            ยกเลิกแล้ว
-                          </Badge>
+                          <Badge className="bg-gray-500 hover:bg-gray-600">ยกเลิกแล้ว</Badge>
                         ) : isExpired(penalty.bannedUntil) ? (
-                          <Badge className="bg-green-500 hover:bg-green-600">
-                            หมดอายุ
-                          </Badge>
+                          <Badge className="bg-green-500 hover:bg-green-600">หมดอายุ</Badge>
                         ) : (
-                          <Badge className="bg-red-500 hover:bg-red-600">
-                            กำลังระงับ
-                          </Badge>
+                          <Badge className="bg-red-500 hover:bg-red-600">กำลังระงับ</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        {penalty.isActive &&
-                          (
-                            <Button
-                              onClick={() => handleUnban(penalty.id)}
-                              size="sm"
-                              variant="outline"
-                              className="border-green-300 text-green-700 hover:bg-green-50"
-                            >
-                              <Check className="w-4 h-4 mr-1" />
-                              ยกเลิกระงับ
-                            </Button>
-                          )}
+                        {penalty.isActive && (
+                          <Button onClick={() => handleUnban(penalty.id)} size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-50">
+                            <Check className="w-4 h-4 mr-1" /> ยกเลิกระงับ
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

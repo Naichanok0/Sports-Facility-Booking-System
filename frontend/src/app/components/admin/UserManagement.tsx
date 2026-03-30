@@ -58,7 +58,12 @@ export default function UserManagement() {
         const response = await userAPI.getAll();
         
         if (isMounted && response.success && Array.isArray(response.data)) {
-          setUsers(response.data as User[]);
+          // Map backend _id to frontend id so components can rely on `id`
+          const mapped = (response.data as any[]).map((u) => ({
+            ...u,
+            id: u.id || u._id || u._id?.toString(),
+          })) as User[];
+          setUsers(mapped);
         } else if (isMounted) {
           setError("ไม่สามารถโหลดข้อมูลผู้ใช้งาน");
         }

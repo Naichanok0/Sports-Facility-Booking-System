@@ -11,6 +11,10 @@ const cancellationSchema = new mongoose.Schema({
     ref: 'User', 
     required: true 
   },
+  facilityId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Facility'
+  },
   cancelledBy: { 
     type: String, 
     enum: ['user', 'admin'], 
@@ -22,6 +26,8 @@ const cancellationSchema = new mongoose.Schema({
     default: 0 
   },
   penaltyReason: String,
+  refundAmount: { type: Number, default: 0 },
+  notes: String,
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

@@ -24,11 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Calendar, Clock, X, CheckCircle, QrCode, Loader2, AlertCircle } from "lucide-react";
+import { Calendar, Clock, X, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
-import { reservationAPI, facilityAPI, checkinAPI } from "../../../services/api";
+import { reservationAPI, facilityAPI } from "../../../services/api";
 
 interface Booking {
   id: string;
@@ -40,7 +40,6 @@ interface Booking {
   status: "confirmed" | "cancelled" | "no-show" | "completed" | "checked-in";
   checkInTime?: string;
   canCancel: boolean;
-  canCheckIn: boolean;
 }
 
 /**
@@ -80,18 +79,27 @@ async function mapReservationToBooking(
     status: reservation.status || "confirmed",
     checkInTime: reservation.checkInTime,
     canCancel: reservation.status === "confirmed",
-    canCheckIn:
-      reservation.status === "confirmed" &&
-      new Date(reservation.date) <= new Date(),
+    // Note: user check-in is not allowed from the booking history page.
   };
 }
 
+const getStatusBadgeColor = (status: string) => {
+  const config: Record<string, string> = {
+    confirmed: "bg-blue-500",
+    "checked-in": "bg-green-500",
+    completed: "bg-gray-500",
+    "no-show": "bg-red-500",
+    cancelled: "bg-orange-500",
+  };
+  return config[status] || "bg-gray-500";
+};
+
 const statusConfig = {
-  confirmed: { label: "จองแล้ว", color: "bg-blue-500" },
-  "checked-in": { label: "เช็คอินแล้ว", color: "bg-green-500" },
-  completed: { label: "ใช้งานเสร็จสิ้น", color: "bg-gray-500" },
-  "no-show": { label: "ไม่มาใช้งาน", color: "bg-red-500" },
-  cancelled: { label: "ยกเลิกแล้ว", color: "bg-orange-500" },
+  confirmed: { label: "จองแล้ว" },
+  "checked-in": { label: "เช็คอินแล้ว" },
+  completed: { label: "ใช้งานเสร็จสิ้น" },
+  "no-show": { label: "ไม่มาใช้งาน" },
+  cancelled: { label: "ยกเลิกแล้ว" },
 };
 
 interface BookingHistoryProps {
@@ -104,7 +112,6 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showCheckInDialog, setShowCheckInDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -185,39 +192,7 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
     }
   };
 
-  const handleCheckIn = async () => {
-    if (!selectedBooking) return;
-
-    try {
-      const now = new Date();
-      const checkInTime = format(now, "HH:mm");
-
-      const result = await checkinAPI.checkin({
-        reservationId: selectedBooking.id,
-        checkInTime,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to check in");
-      }
-
-      // Update local state
-      setBookings(
-        bookings.map((b) =>
-          b.id === selectedBooking.id
-            ? { ...b, status: "checked-in", checkInTime, canCheckIn: false }
-            : b
-        )
-      );
-
-      toast.success("เช็คอินสำเร็จ! ขอให้สนุกกับการออกกำลังกาย");
-      setShowCheckInDialog(false);
-      setSelectedBooking(null);
-    } catch (err: any) {
-      console.error("Error checking in:", err);
-      toast.error(err.message || "ไม่สามารถเช็คอินได้");
-    }
-  };
+  
 
   return (
     <div className="space-y-4">
@@ -303,26 +278,14 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
                       <TableCell>{booking.sportType}</TableCell>
                       <TableCell>
                         <Badge
-                          className={`${statusConfig[booking.status].color} hover:${statusConfig[booking.status].color}`}
+                          className={`${getStatusBadgeColor(booking.status)}`}
                         >
-                          {statusConfig[booking.status].label}
+                          {statusConfig[booking.status]?.label || "Unknown"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {booking.canCheckIn && (
-                            <Button
-                              onClick={() => {
-                                setSelectedBooking(booking);
-                                setShowCheckInDialog(true);
-                              }}
-                              size="sm"
-                              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
-                            >
-                              <QrCode className="w-4 h-4 mr-1" />
-                              เช็คอิน
-                            </Button>
-                          )}
+                          {/* Check-in removed from booking history - only cancel allowed here */}
                           {booking.canCancel && (
                             <Button
                               onClick={() => {
@@ -337,7 +300,7 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
                               ยกเลิก
                             </Button>
                           )}
-                          {!booking.canCancel && !booking.canCheckIn && (
+                          {!booking.canCancel && (
                             <span className="text-sm text-gray-400">-</span>
                           )}
                         </div>
@@ -401,56 +364,7 @@ export default function BookingHistory({ user }: BookingHistoryProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Check-in Dialog */}
-      <Dialog open={showCheckInDialog} onOpenChange={setShowCheckInDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>เช็คอินเข้าใช้งานสนาม</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            {selectedBooking && (
-              <>
-                <div className="flex justify-center">
-                  <div className="w-32 h-32 bg-gradient-to-br from-teal-500 to-blue-500 rounded-lg flex items-center justify-center">
-                    <QrCode className="w-20 h-20 text-white" />
-                  </div>
-                </div>
-
-                <div className="p-4 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg">
-                  <div className="space-y-2 text-sm text-gray-700">
-                    <p>
-                      <strong>สนาม:</strong> {selectedBooking.facilityName}
-                    </p>
-                    <p>
-                      <strong>วันที่:</strong>{" "}
-                      {format(new Date(selectedBooking.date), "d MMMM yyyy", {
-                        locale: th,
-                      })}
-                    </p>
-                    <p>
-                      <strong>เวลา:</strong> {selectedBooking.startTime} -{" "}
-                      {selectedBooking.endTime}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-sm text-gray-600 text-center">
-                  สแกน QR Code นี้ที่เครื่องอ่านหน้าสนาม<br />
-                  หรือกดปุ่มเพื่อเช็คอินด้วยตนเอง
-                </p>
-
-                <Button
-                  onClick={handleCheckIn}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  ยืนยันเช็คอิน
-                </Button>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Check-in removed: users cannot check in from booking history */}
     </div>
   );
 }

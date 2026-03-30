@@ -31,6 +31,7 @@ app.use(express.static('public'));
 
 // Logger
 app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.url}`);
   logger.info(`${req.method} ${req.url}`);
   next();
 });
@@ -51,6 +52,16 @@ app.use('/api/', limiter);
 // ============ MongoDB Connection ============
 async function connectMongo() {
   try {
+    // Load all models first
+    require('./src/models/User');
+    require('./src/models/Facility');
+    require('./src/models/SportType');
+    require('./src/models/Reservation');
+    require('./src/models/CheckIn');
+    require('./src/models/Cancellation');
+    require('./src/models/Queue');
+    require('./src/models/WaitingRoom'); // ← Add this
+    
     await mongoose.connect(process.env.MONGODB_URI, {
       maxPoolSize: 10,
       minPoolSize: 5
@@ -74,6 +85,7 @@ app.use('/api/users', require('./src/api/userApi'));
 app.use('/api/sport-types', require('./src/api/sportTypeApi'));
 app.use('/api/facilities', require('./src/api/facilityApi'));
 app.use('/api/reservations', require('./src/api/reservationApi'));
+app.use('/api/waiting-rooms', require('./src/api/waitingRoomApi'));
 app.use('/api/queues', require('./src/api/queueApi'));
 app.use('/api/checkins', require('./src/api/checkinApi'));
 app.use('/api/cancellations', require('./src/api/cancellationApi'));
@@ -100,14 +112,37 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ============ Global Error Handlers ============
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('❌ Unhandled Rejection at:', promise);
+  logger.error('Reason:', reason);
+  console.error('❌ UNHANDLED REJECTION:', reason);
+  // Don't exit - keep server alive
+});
+
+// Catch uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('❌ Uncaught Exception:', error.message);
+  logger.error('Stack:', error.stack);
+  console.error('❌ UNCAUGHT EXCEPTION:', error);
+  // Don't exit - keep server alive
+});
+
 // ============ Start Server ============
 const server = app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
   logger.info(`🚀 API & Web running at http://localhost:${PORT}`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  await mongoose.disconnect();
-  logger.info('MongoDB disconnected');
+  console.log('\n⏹️  Shutting down gracefully...');
+  try {
+    await mongoose.disconnect();
+    logger.info('MongoDB disconnected gracefully');
+  } catch (err) {
+    logger.error('Error disconnecting MongoDB:', err.message);
+  }
   process.exit(0);
 });

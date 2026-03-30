@@ -86,10 +86,7 @@ const userSchema = new mongoose.Schema({
   }
 }, { collection: 'users' });
 
-// Indexes for faster queries
-userSchema.index({ studentId: 1 });
-userSchema.index({ barcode: 1 });
-userSchema.index({ email: 1 });
+// Indexes for faster queries (note: unique: true fields already create indexes)
 userSchema.index({ role: 1 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -16,9 +16,10 @@ router.post('/checkin', async (req, res) => {
       });
     }
 
-    // Check if already checked in
+    // Check if this user already has a check-in for this reservation
     const existingCheckIn = await CheckIn.findOne({
       reservationId,
+      userId,
       status: 'checked-in'
     });
 
@@ -29,11 +30,17 @@ router.post('/checkin', async (req, res) => {
       });
     }
 
+    // Ensure required fields for CheckIn schema are provided
+  const method = req.body.method || 'manual';
+  // Prefer explicit checkedInBy or staffId; fallback to userId (the user being checked-in) to avoid validation errors
+  const checkedInBy = req.body.checkedInBy || req.body.staffId || req.body.staff || req.body.userId || null;
+
     const newCheckIn = new CheckIn({
       reservationId,
       userId,
       facilityId,
-      staffId,
+      method,
+      checkedInBy,
       checkInTime: new Date(),
       status: 'checked-in'
     });
@@ -46,7 +53,7 @@ router.post('/checkin', async (req, res) => {
     await savedCheckIn.populate([
       { path: 'userId', select: 'firstName lastName barcode' },
       { path: 'facilityId', select: 'name' },
-      { path: 'staffId', select: 'firstName lastName' }
+      { path: 'checkedInBy', select: 'firstName lastName' }
     ]);
 
     res.status(201).json({
@@ -227,6 +234,39 @@ router.get('/reservation/:reservationId', async (req, res) => {
       message: 'Error fetching check in record',
       error: error.message
     });
+  }
+});
+
+// ✅ CANCEL (remove) a check-in by reservationId + userId
+router.post('/cancel', async (req, res) => {
+  try {
+    const { reservationId, userId } = req.body;
+
+    if (!reservationId || !userId) {
+      return res.status(400).json({ success: false, message: 'reservationId and userId are required' });
+    }
+
+    // Find an active check-in for this user on this reservation
+    const existing = await CheckIn.findOne({ reservationId, userId, status: 'checked-in' });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'No active check-in found for this user on this reservation' });
+    }
+
+    // Remove the check-in record
+    await CheckIn.findByIdAndDelete(existing._id);
+
+    // Determine remaining checked-in users for this reservation
+    const remaining = await CheckIn.countDocuments({ reservationId, status: 'checked-in' });
+
+    // If no remaining check-ins, revert reservation status to 'confirmed'
+    if (remaining === 0) {
+      await Reservation.findByIdAndUpdate(reservationId, { status: 'confirmed', updatedAt: new Date() });
+    }
+
+    res.json({ success: true, message: 'Check-in cancelled successfully', data: { reservationId, userId, remaining } });
+  } catch (error) {
+    logger.error('Error cancelling check-in:', error);
+    res.status(500).json({ success: false, message: 'Error cancelling check-in', error: error.message });
   }
 });
 

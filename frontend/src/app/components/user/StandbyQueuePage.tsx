@@ -101,6 +101,9 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
   const [availableQueue, setAvailableQueue] = useState<1 | 2 | 3 | null>(null);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(generateTimeSlots());
+  const [reservationsForFacility, setReservationsForFacility] = useState<any[]>([]);
+  const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   // API State
@@ -137,18 +140,25 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
           setSportTypes((sportTypesRes.data as any[]) || []);
         }
 
+        // Load my standby queues (filter by current user)
         if (queuesRes.success && queuesRes.data) {
-          const queuesData = (queuesRes.data as any[]).map((q: any) => ({
-            id: q._id,
-            queueNumber: q.queueNumber,
-            facilityName: q.facilityName,
-            sportTypeName: q.sportTypeName,
-            date: format(new Date(q.date), "d MMMM yyyy", { locale: th }),
-            timeSlot: `${q.startTime} - ${q.endTime}`,
-            requiredPlayers: q.requiredPlayers,
-            players: q.players || [],
-            status: q.status,
-          }));
+          const allQueues = (queuesRes.data as any[]);
+          const myQueues = allQueues.filter(q => q.userId && ((q.userId._id || q.userId) === (user.id || (user as any)._id)));
+          const queuesData = myQueues.map((q: any) => {
+            const reservation = q.reservationId || {};
+            const facility = q.facilityId || {};
+            return {
+              id: q._id,
+              queueNumber: q.position || 1,
+              facilityName: facility.name || '',
+              sportTypeName: facility.sportTypeName || '',
+              date: reservation.date ? format(new Date(reservation.date), 'd MMMM yyyy', { locale: th }) : '',
+              timeSlot: reservation.startTime ? `${reservation.startTime} - ${reservation.endTime}` : `${q.startTime || ''} - ${q.endTime || ''}`,
+              requiredPlayers: reservation.playerCount || (facility.requiredPlayers || 0),
+              players: [{ id: q.userId?._id || q.userId, firstName: q.userId?.firstName || user.firstName, lastName: q.userId?.lastName || user.lastName, studentId: q.userId?.studentId || '' }],
+              status: q.status || 'waiting'
+            } as StandbyQueue;
+          });
           setMyStandbyQueues(queuesData);
         }
       } catch (error) {
@@ -173,21 +183,21 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
       try {
         const dateStr = format(selectedDate, "yyyy-MM-dd");
         const reservationsRes = await reservationAPI.getFacilityReservations(selectedFacility, dateStr);
-        
         if (reservationsRes.success && Array.isArray(reservationsRes.data)) {
+          const reservations = reservationsRes.data as any[];
+          setReservationsForFacility(reservations);
           // Update time slots based on which ones have reservations (full slots)
           const updatedSlots = generateTimeSlots().map(slot => {
-            const hasReservation = (reservationsRes.data as any[]).some((res: any) => {
-              return res.startTime === slot.start && res.status !== "cancelled";
-            });
+            const hasReservation = reservations.some((res: any) => res.startTime === slot.start && res.status !== 'cancelled');
             return {
               ...slot,
               available: false, // Standby page shows full slots
               hasStandbySlots: hasReservation, // If reservation exists, standby is available
             };
           });
-          
           setTimeSlots(updatedSlots);
+        } else {
+          setReservationsForFacility([]);
         }
       } catch (err: any) {
         console.error("Error checking full slots:", err);
@@ -208,11 +218,50 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
 
   const handleTimeSlotSelect = (slot: TimeSlot) => {
     setSelectedTimeSlot(slot);
-    // Simulate checking available standby queue
-    const random = Math.random();
-    if (random < 0.33) setAvailableQueue(1);
-    else if (random < 0.66) setAvailableQueue(2);
-    else setAvailableQueue(3);
+    // Determine reservation for this facility + time slot and check queue length
+    (async () => {
+      try {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        // Find reservation matching this timeslot
+        const reservationsRes = await reservationAPI.getFacilityReservations(selectedFacility, dateStr);
+        if (!(reservationsRes.success && Array.isArray(reservationsRes.data))) {
+          toast.error('ไม่พบการจองสำหรับช่วงเวลานี้');
+          setAvailableQueue(null);
+          setSelectedReservationId(null);
+          return;
+        }
+
+        const reservation = (reservationsRes.data as any[]).find(r => r.startTime === slot.start && r.status !== 'cancelled');
+        if (!reservation) {
+          toast.error('ไม่พบการจองที่ตรงกับช่วงเวลานี้');
+          setAvailableQueue(null);
+          setSelectedReservationId(null);
+          return;
+        }
+
+        setSelectedReservationId(reservation._id);
+
+        // Get current queue for that reservation
+        const queueRes = await queueAPI.getByReservation(reservation._id);
+        let queueCount = 0;
+        if (queueRes.success && Array.isArray(queueRes.data)) {
+          // Count active waiting/approved entries
+          queueCount = (queueRes.data as any[]).filter((q: any) => q.status === 'waiting' || q.status === 'approved').length;
+        }
+
+        // Only offer standby up to 3 positions
+        if (queueCount >= 3) {
+          setAvailableQueue(null);
+        } else {
+          setAvailableQueue((queueCount as 1 | 2 | 3) + 1 as 1 | 2 | 3);
+        }
+      } catch (err) {
+        console.error('Error determining standby availability:', err);
+        toast.error('ไม่สามารถตรวจสอบคิวได้');
+        setAvailableQueue(null);
+        setSelectedReservationId(null);
+      }
+    })();
   };
 
   const handleJoinStandbyQueue = () => {
@@ -223,14 +272,96 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
     setShowConfirmDialog(true);
   };
 
-  const confirmJoinQueue = () => {
-    toast.success(
-      `เข้าคิวหลุด ${availableQueue} สำเร็จ! คุณจะได้รับการแจ้งเตือนเมื่อคิวของคุณถูกเรียก`
-    );
-    setShowConfirmDialog(false);
-    setSelectedFacility("");
-    setSelectedTimeSlot(null);
-    setAvailableQueue(null);
+  const confirmJoinQueue = async () => {
+    if (!selectedReservationId) {
+      toast.error('ไม่พบการจองที่ต้องการ');
+      return;
+    }
+    try {
+      setJoining(true);
+      const payload = {
+        reservationId: selectedReservationId,
+        userId: user.id,
+        facilityId: selectedFacility,
+        playerName: `${user.firstName} ${user.lastName}`,
+        playerBarcode: (user as any).barcode || ''
+      };
+
+      const res = await queueAPI.join(payload);
+      if (!res.success) {
+        toast.error(res.message || 'ไม่สามารถเข้าคิวได้');
+        return;
+      }
+
+      toast.success(`เข้าคิวหลุด ${availableQueue} สำเร็จ!`);
+      setShowConfirmDialog(false);
+      setSelectedFacility("");
+      setSelectedTimeSlot(null);
+      setAvailableQueue(null);
+      setSelectedReservationId(null);
+
+      // Refresh my queues
+      const allQueuesRes = await queueAPI.getAll();
+      if (allQueuesRes.success && Array.isArray(allQueuesRes.data)) {
+        const myQueues = (allQueuesRes.data as any[]).filter(q => q.userId && ((q.userId._id || q.userId) === (user.id || (user as any)._id)));
+        const queuesData = myQueues.map((q: any) => {
+          const reservation = q.reservationId || {};
+          const facility = q.facilityId || {};
+          return {
+            id: q._id,
+            queueNumber: q.position || 1,
+            facilityName: facility.name || '',
+            sportTypeName: facility.sportTypeName || '',
+            date: reservation.date ? format(new Date(reservation.date), 'd MMMM yyyy', { locale: th }) : '',
+            timeSlot: reservation.startTime ? `${reservation.startTime} - ${reservation.endTime}` : `${q.startTime || ''} - ${q.endTime || ''}`,
+            requiredPlayers: reservation.playerCount || (facility.requiredPlayers || 0),
+            players: [{ id: q.userId?._id || q.userId, firstName: q.userId?.firstName || user.firstName, lastName: q.userId?.lastName || user.lastName, studentId: q.userId?.studentId || '' }],
+            status: q.status || 'waiting'
+          } as StandbyQueue;
+        });
+        setMyStandbyQueues(queuesData);
+      }
+    } catch (err: any) {
+      console.error('Error joining queue:', err);
+      toast.error(err.message || 'เกิดข้อผิดพลาดขณะเข้าคิว');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleCancelQueue = async (queueId: string) => {
+    try {
+      const res = await queueAPI.cancel(queueId);
+      if (!res.success) {
+        toast.error(res.message || 'ไม่สามารถยกเลิกคิวได้');
+        return;
+      }
+      toast.success('ยกเลิกคิวเรียบร้อยแล้ว');
+      // Refresh my queues
+      const allQueuesRes = await queueAPI.getAll();
+      if (allQueuesRes.success && Array.isArray(allQueuesRes.data)) {
+        const myQueues = (allQueuesRes.data as any[]).filter(q => q.userId && ((q.userId._id || q.userId) === (user.id || (user as any)._id)));
+        const queuesData = myQueues.map((q: any) => {
+          const reservation = q.reservationId || {};
+          const facility = q.facilityId || {};
+          return {
+            id: q._id,
+            queueNumber: q.position || 1,
+            facilityName: facility.name || '',
+            sportTypeName: facility.sportTypeName || '',
+            date: reservation.date ? format(new Date(reservation.date), 'd MMMM yyyy', { locale: th }) : '',
+            timeSlot: reservation.startTime ? `${reservation.startTime} - ${reservation.endTime}` : `${q.startTime || ''} - ${q.endTime || ''}`,
+            requiredPlayers: reservation.playerCount || (facility.requiredPlayers || 0),
+            players: [{ id: q.userId?._id || q.userId, firstName: q.userId?.firstName || user.firstName, lastName: q.userId?.lastName || user.lastName, studentId: q.userId?.studentId || '' }],
+            status: q.status || 'waiting'
+          } as StandbyQueue;
+        });
+        setMyStandbyQueues(queuesData);
+      }
+    } catch (err) {
+      console.error('Error cancelling queue:', err);
+      toast.error('เกิดข้อผิดพลาดขณะยกเลิกคิว');
+    }
   };
 
   return (
@@ -287,6 +418,8 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
                   variant="outline"
                   size="sm"
                   className="border-red-300 text-red-600 hover:bg-red-50"
+                  onClick={() => handleCancelQueue(queue.id)}
+                  disabled={queue.status !== 'waiting'}
                 >
                   ยกเลิกคิว
                 </Button>
@@ -508,12 +641,12 @@ export default function StandbyQueuePage({ user }: StandbyQueuePageProps) {
 
       {/* Confirm Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-md">
+    <DialogContent className="max-w-md" aria-describedby="standby-dialog-desc">
           <DialogHeader>
             <DialogTitle>ยืนยันการเข้าคิวหลุด</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg">
+            <div id="standby-dialog-desc" className="p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg">
               <h4 className="font-bold text-gray-800 mb-3">รายละเอียด</h4>
               <div className="space-y-2 text-sm text-gray-700">
                 <p>
